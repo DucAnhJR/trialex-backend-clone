@@ -99,6 +99,7 @@ async function bootstrap() {
 
   // await app.listen(configService.getOrThrow('app.port', { infer: true }));
   const port =
+    process.env.PORT ||
     process.env.APP_PORT ||
     configService.getOrThrow('app.port', { infer: true });
 
