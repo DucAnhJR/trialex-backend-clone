@@ -6,8 +6,6 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
-import * as fs from 'fs';
-import path from 'path';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { Session, SessionSchema } from './schemas/session.schema';
@@ -25,20 +23,29 @@ import { Session, SessionSchema } from './schemas/session.schema';
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: () => ({
-        privateKey: fs.readFileSync(
-          path.resolve(process.cwd(), 'secrets/private.key'),
-        ),
-        publicKey: fs.readFileSync(
-          path.resolve(process.cwd(), 'secrets/public.key'),
-        ),
-        signOptions: {
-          algorithm: 'RS256',
-        },
-        verifyOptions: {
-          algorithms: ['RS256'],
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const privateKey = config
+          .get<string>('AUTH_JWT_PRIVATE_KEY')
+          ?.replace(/\\n/g, '\n');
+        const publicKey = config
+          .get<string>('AUTH_JWT_PUBLIC_KEY')
+          ?.replace(/\\n/g, '\n');
+
+        if (!privateKey || !publicKey) {
+          throw new Error('JWT keys are not configured');
+        }
+
+        return {
+          privateKey,
+          publicKey,
+          signOptions: {
+            algorithm: 'RS256',
+          },
+          verifyOptions: {
+            algorithms: ['RS256'],
+          },
+        };
+      },
     }),
     SmsQueueModule,
     EmailQueueModule,
