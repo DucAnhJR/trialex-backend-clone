@@ -1,0 +1,25 @@
+services:
+  trialex-backend:
+    image: ghcr.io/hainguyentien/trialex-backend:latest
+    container_name: trialex-backend
+    restart: always
+    pull_policy: always
+    env_file:
+      - .env
+    environment:
+      APP_PORT: ${APP_PORT:-4002}
+      DATABASE_URL: ${DATABASE_URL:-mongodb://host.docker.internal:27017/app_data}
+      AUTH_JWT_REFRESH_SECRET: ${AUTH_JWT_REFRESH_SECRET}
+      AUTH_JWT_REFRESH_TOKEN_EXPIRES_IN: ${AUTH_JWT_REFRESH_TOKEN_EXPIRES_IN:-365d}
+    ports:
+      - "4002:4002"
+    volumes:
+      - ./secrets:/app/secrets:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - trialex-network
+
+networks:
+  trialex-network:
+    driver: bridge
