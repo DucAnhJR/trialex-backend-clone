@@ -5,6 +5,7 @@ import {
   UnprocessableEntityException,
   ValidationError,
   ValidationPipe,
+  VERSION_NEUTRAL,
   VersioningType,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -77,6 +78,7 @@ async function bootstrap() {
 
   app.enableVersioning({
     type: VersioningType.URI,
+    defaultVersion: [VERSION_NEUTRAL, '1'],
   });
 
   app.useGlobalGuards(new AuthGuard(reflector, app.get(AuthService)));
@@ -98,7 +100,7 @@ async function bootstrap() {
   }
 
   // await app.listen(configService.getOrThrow('app.port', { infer: true }));
-  const port = 8080;
+  const port = configService.getOrThrow('app.port', { infer: true });
 
   await app.listen(port, '0.0.0.0');
   console.info(`Server running on http://0.0.0.0:${port}`);
