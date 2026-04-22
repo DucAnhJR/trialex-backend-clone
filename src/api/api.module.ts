@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
+import { DiscoverModule } from './discover/discover.module';
 import { DeviceTokenModule } from './device-tokens/device-token.module';
 import { HealthModule } from './health/health.module';
 import { HomeModule } from './home/home.module';
@@ -17,6 +18,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
   imports: [
     NotificationsModule,
     DeviceTokenModule,
+    DiscoverModule,
     AppointmentsModule,
     TrialsModule,
     PublicationModule,

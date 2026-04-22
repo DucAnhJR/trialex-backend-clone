@@ -29,6 +29,7 @@
     "db:create": "env-cmd ts-node ./node_modules/typeorm-extension/bin/cli.cjs db:create",
     "db:drop": "env-cmd ts-node ./node_modules/typeorm-extension/bin/cli.cjs db:drop",
     "seed:run": "env-cmd ts-node ./node_modules/typeorm-extension/bin/cli.cjs seed:run",
+    "seed:discover": "env-cmd -f .env ts-node -r tsconfig-paths/register scripts/seed-discover.ts",
     "seed:create": "env-cmd ts-node ./node_modules/typeorm-extension/bin/cli.cjs seed:create",
     "prepare": "husky || true",
     "docs:dev": "vuepress dev docs",
