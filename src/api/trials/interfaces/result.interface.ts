@@ -20,4 +20,13 @@ export class Result {
   @Expose()
   @Prop({ default: null })
   post_trial_update: string;
+
+  @StringField({
+    description: 'URL to the publication or summary of results',
+    example: 'https://journal.example.com/trial-results',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: null })
+  publication_url: string;
 }

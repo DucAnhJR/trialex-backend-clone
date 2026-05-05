@@ -1,4 +1,4 @@
-import { StringField } from '@/decorators/field.decorators';
+import { NumberField, StringField } from '@/decorators/field.decorators';
 import { Prop } from '@nestjs/mongoose';
 import { Expose } from 'class-transformer';
 
@@ -39,4 +39,22 @@ export class StudyDesign {
   @Expose()
   @Prop({ default: null })
   control: string;
+
+  @StringField({
+    description: 'Step-by-step schedule of the trial from consent to follow-up',
+    example: 'Day 0: Consent. Days 1-7: Medication. Day 8: Assessment.',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: null })
+  schedule: string;
+
+  @NumberField({
+    description: 'Total number of study visits per participant',
+    example: 4,
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: null })
+  number_of_visits: number;
 }

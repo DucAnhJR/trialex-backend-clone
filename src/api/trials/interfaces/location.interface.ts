@@ -37,4 +37,17 @@ export class Location {
   @Expose()
   @Prop({ default: null })
   proximity: string;
+
+  @StringField({
+    description: 'Site codes for each participating location',
+    example: ['ACL001Ayr', 'ACL002Birmingham'],
+    isArray: true,
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ type: [String], default: [] })
+  site_codes: string[];
+
+  @Prop({ default: false })
+  is_multisite: boolean;
 }

@@ -40,4 +40,22 @@ export class Contact {
   @Expose()
   @Prop({ default: null })
   phone: string;
+
+  @StringField({
+    description: 'Name of the designated contact person',
+    example: 'Dr. Eva Periche-Tomas',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: null })
+  contact_name: string;
+
+  @StringField({
+    description: 'Official trial or study website URL',
+    example: 'https://aclstarr.com',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: null })
+  website: string;
 }

@@ -20,6 +20,7 @@ export class Trials {
     default: () => ({
       id: null,
       name: null,
+      full_name: null,
       start_date: null,
       end_date: null,
       purpose: null,
@@ -27,6 +28,8 @@ export class Trials {
       milestones: [],
       description: { short: null, elaborated: null },
       theme: null,
+      keywords: [],
+      pis_urls: [],
     }),
   })
   overview: Overview;
@@ -37,6 +40,8 @@ export class Trials {
       phase: null,
       treatment_type: null,
       control: null,
+      schedule: null,
+      number_of_visits: null,
     }),
   })
   study_design: StudyDesign;
@@ -57,6 +62,8 @@ export class Trials {
       postcodes: [],
       number: null,
       proximity: null,
+      site_codes: [],
+      is_multisite: false,
     }),
   })
   location: Location;
@@ -78,6 +85,8 @@ export class Trials {
       sponsor: null,
       email: null,
       phone: null,
+      contact_name: null,
+      website: null,
     }),
   })
   contact: Contact;
@@ -103,6 +112,7 @@ export class Trials {
     default: () => ({
       outcome: null,
       post_trial_update: null,
+      publication_url: null,
     }),
   })
   result: Result;
@@ -115,6 +125,21 @@ export class Trials {
 
   @Prop({ type: String, unique: true, sparse: true, match: /^\d{6}$/ })
   referal_code: string;
+
+  @Prop({ type: String, default: null })
+  trial_status: string;
+
+  @Prop({ type: String, default: null })
+  recruitment_status: string;
+
+  @Prop({ type: Boolean, default: false })
+  invite_only: boolean;
+
+  @Prop({
+    type: [{ question: String, answer: String }],
+    default: [],
+  })
+  faqs: { question: string; answer: string }[];
 }
 
 export const TrialsSchema = SchemaFactory.createForClass(Trials);

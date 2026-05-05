@@ -84,4 +84,33 @@ export class Overview {
   @Expose()
   @Prop({ default: null })
   theme: string;
+
+  @StringField({
+    description: 'Full official name of the trial',
+    example: 'Anterior Cruciate Ligament Stratified Accelerated Repair or Reconstruction',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: null })
+  full_name: string;
+
+  @StringField({
+    description: 'Search keywords for the trial',
+    example: ['ACL', 'Knee', 'Surgery'],
+    isArray: true,
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ type: [String], default: [] })
+  keywords: string[];
+
+  @StringField({
+    description: 'URLs to the Patient Information Sheet(s)',
+    example: ['https://example.com/pis.pdf'],
+    isArray: true,
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ type: [String], default: [] })
+  pis_urls: string[];
 }
