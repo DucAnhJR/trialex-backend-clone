@@ -12,6 +12,10 @@ import { plainToInstance } from 'class-transformer';
 import * as crypto from 'crypto';
 import { merge } from 'lodash';
 import { FilterQuery, Model, Types } from 'mongoose';
+import {
+  TrialPreference,
+  TrialPreferenceDocument,
+} from '../users/schemas/trial-preference.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { QueryTrialsRecord } from './dto/query-active-trials-record.dto';
 import { UpdateReferralCodeDto } from './dto/referral-code.dto';
@@ -32,7 +36,76 @@ export class TrialsService {
     private trialsRecordModel: Model<TrialsRecordDocument>,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
+    @InjectModel(TrialPreference.name)
+    private trialPreferenceModel: Model<TrialPreferenceDocument>,
   ) {}
+
+  async getUserRecommendedTrials(
+    userId: Types.ObjectId,
+  ): Promise<ResponseDto<TrialsResDto[]>> {
+    const user = await this.userModel.findById(userId).lean();
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const preferenceIds = (user.trial_preferences || []).map((item) =>
+      item.toString(),
+    );
+
+    if (preferenceIds.length === 0) {
+      return new ResponseDto<TrialsResDto[]>({
+        data: [],
+        message: 'Retrieved recommended trials successfully',
+      });
+    }
+
+    const preferences = await this.trialPreferenceModel
+      .find({
+        _id: { $in: preferenceIds.map((id) => new Types.ObjectId(id)) },
+      })
+      .lean();
+
+    const names = preferences
+      .map((item) => item.trial_preferences_name?.trim())
+      .filter(Boolean);
+
+    if (names.length === 0) {
+      return new ResponseDto<TrialsResDto[]>({
+        data: [],
+        message: 'Retrieved recommended trials successfully',
+      });
+    }
+
+    const fields = [
+      'overview.medical_condition',
+      'overview.theme',
+      'overview.name',
+      'overview.full_name',
+      'overview.keywords',
+      'overview.description.short',
+      'overview.description.elaborated',
+    ];
+
+    const orClauses = names.flatMap((name) => {
+      const regex = new RegExp(this.escapeRegex(name), 'i');
+      return fields.map((field) => ({ [field]: regex }));
+    });
+
+    const filter: FilterQuery<Trials> = { $or: orClauses };
+
+    const trials = await this.trialModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .populate('study_team')
+      .lean();
+
+    return new ResponseDto<TrialsResDto[]>({
+      data: plainToInstance(TrialsResDto, trials, {
+        excludeExtraneousValues: true,
+      }),
+      message: 'Retrieved recommended trials successfully',
+    });
+  }
 
   async findTrialRecordById(
     id: Types.ObjectId,
@@ -607,5 +680,9 @@ export class TrialsService {
     const buf = crypto.randomBytes(4);
     const num = buf.readUInt32BE() % 1000000;
     return num.toString().padStart(6, '0');
+  }
+
+  private escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 }

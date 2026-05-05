@@ -2,6 +2,10 @@ import {
   StudyTeamMembers,
   StudyTeamMembersSchema,
 } from '@/api/study-team-members/schemas/study-team-members.schema';
+import {
+  TrialPreference,
+  TrialPreferenceSchema,
+} from '@/api/users/schemas/trial-preference.schema';
 import { User, UserSchema } from '@/api/users/schemas/user.schema';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -31,6 +35,10 @@ import { TrialsService } from './trials.service';
       {
         name: StudyTeamMembers.name,
         schema: StudyTeamMembersSchema,
+      },
+      {
+        name: TrialPreference.name,
+        schema: TrialPreferenceSchema,
       },
     ]),
   ],

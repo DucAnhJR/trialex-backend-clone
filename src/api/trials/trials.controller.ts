@@ -277,4 +277,16 @@ export class TrialsController {
   ) {
     return this.trialsService.getUserSavedTrials(query, userId);
   }
+
+  @Get('user/recommend')
+  @ApiAuth({
+    description:
+      'Get recommended trials for the current user based on trial preferences',
+    summary: 'Get User Recommended Trials',
+    type: TrialsResDto,
+    isArray: true,
+  })
+  async getUserRecommendedTrials(@CurrentUser('id') userId: Types.ObjectId) {
+    return this.trialsService.getUserRecommendedTrials(userId);
+  }
 }
