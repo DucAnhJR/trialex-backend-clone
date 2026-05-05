@@ -6,7 +6,6 @@ import { UserRole } from '@/database/enums/user.enum';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { Document } from '../interfaces/document.interface';
-import { TrialPreferences } from '../interfaces/trial-preferences.interface';
 
 export type UserDocument = HydratedDocument<User>;
 
@@ -82,8 +81,8 @@ export class User {
   })
   security: Security;
 
-  @Prop({ type: [Object], default: [] })
-  trial_preferences: TrialPreferences[];
+  @Prop({ type: [Types.ObjectId], ref: 'TrialPreference', default: [] })
+  trial_preferences: Types.ObjectId[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

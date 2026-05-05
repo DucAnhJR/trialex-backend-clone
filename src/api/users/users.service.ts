@@ -28,6 +28,10 @@ import { Information } from './interfaces/information.interface';
 import { Notifications } from './interfaces/notifications.interface';
 import { Security } from './interfaces/security.interface';
 import { TrialPreferences } from './interfaces/trial-preferences.interface';
+import {
+  TrialPreference,
+  TrialPreferenceDocument,
+} from './schemas/trial-preference.schema';
 import { User, UserDocument } from './schemas/user.schema';
 
 @Injectable()
@@ -36,6 +40,8 @@ export class UsersService {
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(TrialPreference.name)
+    private trialPreferenceModel: Model<TrialPreferenceDocument>,
     @InjectModel(TrialsRecord.name)
     private trialsRecordModel: Model<TrialsRecordDocument>,
     private readonly appointmentsService: AppointmentsService,
@@ -232,8 +238,20 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    const options = await this.trialPreferenceModel.find().lean();
+    const selectedSet = new Set(
+      (user.trial_preferences || []).map((item) => item.toString()),
+    );
+
+    const data = options.map((item) => ({
+      _id: item._id.toString(),
+      trial_preferences_name: item.trial_preferences_name,
+      image: item.image,
+      selected: selectedSet.has(item._id.toString()),
+    }));
+
     return new ResponseDto<TrialPreferences[]>({
-      data: user.trial_preferences || [],
+      data,
       message: 'User trial preferences retrieved successfully',
     });
   }
@@ -247,24 +265,28 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const trialPreferences = user.trial_preferences || [];
-    const idx = trialPreferences.findIndex(
-      (item: any) => item.title === preferences.trialPreference,
+    const preference = await this.trialPreferenceModel.findById(
+      preferences.trialPreferenceId,
     );
-
-    if (idx !== -1) {
-      trialPreferences[idx].selected = preferences.selected;
-    } else {
-      trialPreferences.push({
-        title: preferences.trialPreference,
-        image: '',
-        selected: preferences.selected,
-      });
+    if (!preference) {
+      throw new NotFoundException('Trial preference not found');
     }
+
+    const update = preferences.selected
+      ? {
+          $addToSet: {
+            trial_preferences: new Types.ObjectId(preferences.trialPreferenceId),
+          },
+        }
+      : {
+          $pull: {
+            trial_preferences: new Types.ObjectId(preferences.trialPreferenceId),
+          },
+        };
 
     const updatedUser = await this.userModel.findByIdAndUpdate(
       id,
-      { $set: { trial_preferences: trialPreferences } },
+      update,
       { new: true, runValidators: true },
     );
 
@@ -272,9 +294,23 @@ export class UsersService {
       throw new BadRequestException('Failed to update trial preferences');
     }
 
+    const options = await this.trialPreferenceModel.find().lean();
+    const selectedSet = new Set(
+      (updatedUser.trial_preferences || []).map((item) => item.toString()),
+    );
+
+    const data = options.map((item) => ({
+      _id: item._id.toString(),
+      trial_preferences_name: item.trial_preferences_name,
+      image: item.image,
+      selected: selectedSet.has(item._id.toString()),
+    }));
+
     return new ResponseDto<TrialPreferences[]>({
-      data: updatedUser.trial_preferences || [],
-      message: 'User trial preferences updated successfully',
+      data,
+      message: preferences.selected
+        ? 'Trial preference selected successfully'
+        : 'Trial preference unselected successfully',
     });
   }
 

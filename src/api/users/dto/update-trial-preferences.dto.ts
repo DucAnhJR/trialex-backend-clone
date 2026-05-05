@@ -1,15 +1,15 @@
-import { BooleanField, StringField } from '@/decorators/field.decorators';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsBoolean, IsMongoId } from 'class-validator';
 
 export class UpdateTrialsPreferencesDto {
-  @StringField({
-    description: 'The trial preference option',
-    example: 'Daily Updates',
+  @ApiProperty({
+    description: 'Trial preference document id',
+    example: '67b93550f81beed12ab81417',
   })
-  trialPreference: string;
+  @IsMongoId()
+  trialPreferenceId: string;
 
-  @BooleanField({
-    description: 'Indicates if this preference is selected by the user',
-    example: true,
-  })
+  @ApiProperty({ description: 'Select or unselect preference', example: true })
+  @IsBoolean()
   selected: boolean;
 }

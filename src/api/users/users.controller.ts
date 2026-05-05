@@ -142,18 +142,18 @@ export class UsersController {
   @Get('trials-preferences')
   @ApiAuth({
     summary: 'Get user trial preferences',
-    description: 'Fetches the trial preferences of the current user.',
-    type: String,
-    isArray: true,
+    description:
+      'Fetches the trial preferences options and selected status of the current user.',
   })
   getTrialsPreferences(@CurrentUser('id') id: Types.ObjectId) {
     return this.usersService.getTrialsPreferences(id);
   }
 
-  @Patch('trials-preferences')
+  @Post('trials-preferences')
   @ApiAuth({
-    summary: 'Update user trial preferences',
-    description: 'Allows a user to update their trial preferences.',
+    summary: 'Select or unselect a trial preference',
+    description:
+      'Adds/removes a trial preference id in user.trial_preferences of the current user.',
   })
   updateTrialsPreferences(
     @CurrentUser('id') id: Types.ObjectId,

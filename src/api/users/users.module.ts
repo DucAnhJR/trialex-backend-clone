@@ -5,6 +5,10 @@ import {
   TrialsRecord,
   TrialsRecordSchema,
 } from '../trials/schemas/trials-record.schema';
+import {
+  TrialPreference,
+  TrialPreferenceSchema,
+} from './schemas/trial-preference.schema';
 import { User, UserSchema } from './schemas/user.schema';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -17,6 +21,7 @@ import { UsersService } from './users.service';
         schema: UserSchema,
       },
       { name: TrialsRecord.name, schema: TrialsRecordSchema },
+      { name: TrialPreference.name, schema: TrialPreferenceSchema },
     ]),
     AppointmentsModule,
   ],
