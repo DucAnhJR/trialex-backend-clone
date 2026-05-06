@@ -1,6 +1,6 @@
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiAuth, ApiPublic } from '@/decorators/http.decorators';
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiParam, ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { MarkReadDto } from './dto/mark-read.dto';
@@ -32,7 +32,7 @@ export class NotificationsController {
     summary: 'Đánh dấu thông báo là đã đọc',
   })
   async markRead(
-    @Query() dto: MarkReadDto,
+    @Body() dto: MarkReadDto,
     @CurrentUser('id') userId: Types.ObjectId,
   ) {
     return this.notificationService.markRead(dto, userId);

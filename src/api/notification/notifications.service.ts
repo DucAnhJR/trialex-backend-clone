@@ -184,6 +184,9 @@ export class NotificationsService {
   async sendPushNotification(dto: SendPushNotificationDto) {
     const userReceivedNoti = await this.userServices.findOne(dto.userId);
 
+    const notification = await this.createNotification(dto);
+
+    // Persist in-app notification even when push token is missing.
     const deviceTokens = await this.deviceTokenModel
       .find({
         userId: new Types.ObjectId(dto.userId),
@@ -194,10 +197,8 @@ export class NotificationsService {
       this.logger.warn(
         `No device tokens found for userId: ${dto.userId}. Push notification not sent.`,
       );
-      return;
+      return notification;
     }
-
-    const notification = await this.createNotification(dto);
 
     const data = {
       ...Object.fromEntries(
@@ -257,6 +258,8 @@ export class NotificationsService {
     } catch (error) {
       this.logger.error('Failed to send push notification:', error);
     }
+
+    return notification;
   }
 
   private async handleExpoResponse(

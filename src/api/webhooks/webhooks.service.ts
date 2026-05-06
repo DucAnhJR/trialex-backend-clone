@@ -28,30 +28,50 @@ export class WebhooksService {
   }
 
   async handleGetStreamWebhook(webhookData: Event): Promise<void> {
-    if (webhookData.type === 'message.new') {
-      await this.handleNewMessage(webhookData);
+    if (webhookData.type !== 'message.new') {
+      return;
     }
+
+    await this.handleNewMessage(webhookData);
   }
 
-  private async handleNewMessage(webhookData: Event) {
-    this.logger.log(
-      `New message from ${webhookData.message?.user?.id} in ${webhookData.channel_id}`,
-    );
-
+  private async handleNewMessage(webhookData: Event): Promise<void> {
     const senderId = webhookData.message?.user?.id;
+    const messageId = webhookData.message?.id;
+    const channelId = webhookData.channel_id;
+    const messageText = webhookData.message?.text || 'You have a new message';
+    const members = webhookData.channel?.members || [];
 
-    const receivers = webhookData.channel?.members?.filter(
-      (member) => member.user_id !== senderId,
-    );
+    this.logger.log(`New message from ${senderId} in ${channelId}`);
 
-    for (const receiver of receivers) {
+    if (!senderId || !Types.ObjectId.isValid(senderId)) {
+      this.logger.warn(
+        `Skip message.new webhook: invalid senderId="${senderId}" for channelId="${channelId}"`,
+      );
+      return;
+    }
+
+    const receivers = members
+      .map((member) => member.user_id)
+      .filter((memberId): memberId is string => Boolean(memberId))
+      .filter((memberId) => memberId !== senderId)
+      .filter((memberId) => Types.ObjectId.isValid(memberId));
+
+    if (receivers.length === 0) {
+      this.logger.debug(
+        `No valid receivers for message.new event in channelId="${channelId}"`,
+      );
+      return;
+    }
+
+    const jobs = receivers.map(async (receiverId) => {
       const notificationData: SendPushNotificationDto = {
         senderId: new Types.ObjectId(senderId),
-        userId: new Types.ObjectId(receiver.user_id),
+        userId: new Types.ObjectId(receiverId),
         title: 'New Message',
-        message: webhookData.message?.text,
+        message: messageText,
         data: {
-          uri: `https://trialex.app/MainStack/Chat?channelId=${webhookData.channel_id}`,
+          uri: `https://trialex.app/MainStack/Chat?channelId=${channelId}`,
         },
         type: NotificationTypeEnum.MESSAGE,
       };
@@ -60,12 +80,24 @@ export class WebhooksService {
         JobName.SEND_PUSH_NOTIFICATION_MESSAGE,
         notificationData,
         {
+          attempts: 5,
           backoff: {
             type: 'exponential',
             delay: 5000,
           },
+          removeOnComplete: {
+            age: 86400,
+            count: 500,
+          },
+          removeOnFail: {
+            age: 172800,
+            count: 1000,
+          },
+          jobId: `${messageId || channelId || 'message'}:${receiverId}`,
         },
       );
-    }
+    });
+
+    await Promise.allSettled(jobs);
   }
 }
