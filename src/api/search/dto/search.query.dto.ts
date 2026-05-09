@@ -1,4 +1,7 @@
-import { NumberFieldOptional, StringFieldOptional } from '@/decorators/field.decorators';
+import {
+  NumberFieldOptional,
+  StringFieldOptional,
+} from '@/decorators/field.decorators';
 
 export class SearchQueryDto {
   @StringFieldOptional({

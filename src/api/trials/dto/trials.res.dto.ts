@@ -10,7 +10,11 @@ import {
   StudyDesign,
 } from '@/api/trials/interfaces';
 import { AuditResDto } from '@/common/dto/response/audit.dto';
-import { ClassField, StringField } from '@/decorators/field.decorators';
+import {
+  BooleanField,
+  ClassField,
+  StringField,
+} from '@/decorators/field.decorators';
 import { Expose, Type } from 'class-transformer';
 
 export class TrialsResDto extends AuditResDto {
@@ -60,4 +64,7 @@ export class TrialsResDto extends AuditResDto {
 
   @StringField({ nullable: true }) @Expose() logo: string;
   @StringField({ nullable: true }) @Expose() referal_code: string;
+  @StringField({ nullable: true }) @Expose() recruitment_status: string;
+  @StringField({ nullable: true }) @Expose() trial_status: string;
+  @BooleanField({ default: false }) @Expose() invite_only: boolean;
 }

@@ -1,9 +1,9 @@
-import { NumberField, StringField } from '@/decorators/field.decorators';
+import { StringField } from '@/decorators/field.decorators';
 import { Prop } from '@nestjs/mongoose';
 import { Expose } from 'class-transformer';
 
 export class Commitment {
-  @NumberField({
+  @StringField({
     description: 'Duration of the trial commitment',
     example: '6 months',
     nullable: true,
@@ -30,3 +30,4 @@ export class Commitment {
   @Prop({ default: null })
   mode: string;
 }
+
