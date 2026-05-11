@@ -438,6 +438,7 @@ export class TrialsService {
         is_approved: true,
         approval_date: new Date(),
         is_active: true,
+        trial_status: TrialStatus.IN_PROGRESS,
       },
       { new: true },
     );
@@ -603,8 +604,7 @@ export class TrialsService {
   ): Promise<OffsetPaginatedDto<TrialsRecordResDto>> {
     const filter: FilterQuery<TrialsRecord> = {
       user_id: userId,
-      is_active: true,
-      is_approved: true,
+      // is_active: true,
     };
 
     if (query.q) {
