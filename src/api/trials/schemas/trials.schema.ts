@@ -123,6 +123,9 @@ export class Trials {
   @Prop({ default: '' })
   logo: string;
 
+  @Prop({ default: '' })
+  icon: string;
+
   @Prop({ type: String, unique: true, sparse: true, match: /^\d{6}$/ })
   referal_code: string;
 

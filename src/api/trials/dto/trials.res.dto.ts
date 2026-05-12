@@ -63,6 +63,7 @@ export class TrialsResDto extends AuditResDto {
   result: Result;
 
   @StringField({ nullable: true }) @Expose() logo: string;
+  @StringField({ nullable: true }) @Expose() icon: string;
   @StringField({ nullable: true }) @Expose() referal_code: string;
   @StringField({ nullable: true }) @Expose() recruitment_status: string;
   @StringField({ nullable: true }) @Expose() trial_status: string;
