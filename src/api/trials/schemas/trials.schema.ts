@@ -6,10 +6,12 @@ import {
   Overview,
   Participant,
   Result,
+  StudyProcedure,
+  StudyTeamMember,
   StudyDesign,
 } from '@/api/trials/interfaces';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument } from 'mongoose';
 
 export type TrialsDocument = HydratedDocument<Trials>;
 
@@ -85,8 +87,10 @@ export class Trials {
       sponsor: null,
       email: null,
       phone: null,
+      position: null,
       contact_name: null,
       website: null,
+      avatar: '',
     }),
   })
   contact: Contact;
@@ -97,6 +101,9 @@ export class Trials {
   risks: string[];
   @Prop({ type: [String], default: [] })
   compensations: string[];
+
+  @Prop({ type: [StudyProcedure], default: [] })
+  study_procedures: StudyProcedure[];
 
   @Prop({
     type: Ethical,
@@ -117,8 +124,8 @@ export class Trials {
   })
   result: Result;
 
-  @Prop({ type: [Types.ObjectId], ref: 'StudyTeamMembers', default: [] })
-  study_team: Types.ObjectId[];
+  @Prop({ type: [StudyTeamMember], default: [] })
+  study_team: StudyTeamMember[];
 
   @Prop({ default: '' })
   logo: string;

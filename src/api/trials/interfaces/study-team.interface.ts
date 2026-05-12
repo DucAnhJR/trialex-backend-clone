@@ -3,10 +3,10 @@ import { Prop } from '@nestjs/mongoose';
 import { Expose } from 'class-transformer';
 import { IsPhoneNumber } from 'class-validator';
 
-export class Contact {
+export class StudyTeamMember {
   @StringField({
-    description: 'Principal investigator of the trial',
-    example: 'Dr. John Doe',
+    description: 'Principal investigator name',
+    example: 'Dr. Sarah Johnson',
     nullable: true,
   })
   @Expose()
@@ -14,8 +14,8 @@ export class Contact {
   principal_investigator: string;
 
   @StringField({
-    description: 'Sponsor of the trial',
-    example: 'Pharma Inc.',
+    description: 'Trial sponsor',
+    example: 'CardioPharm Australia Pty Ltd',
     nullable: true,
   })
   @Expose()
@@ -23,8 +23,8 @@ export class Contact {
   sponsor: string;
 
   @StringField({
-    description: 'Contact email for the trial',
-    example: 'contact@pharmatrial.com',
+    description: 'Contact email',
+    example: 'trial.cvd001@cardiopharm.com.au',
     nullable: true,
   })
   @Expose()
@@ -32,8 +32,8 @@ export class Contact {
   email: string;
 
   @StringField({
-    description: 'Contact phone number for the trial',
-    example: '+1234567890',
+    description: 'Contact phone number',
+    example: '61412345678',
     nullable: true,
   })
   @IsPhoneNumber()
@@ -42,7 +42,7 @@ export class Contact {
   phone: string;
 
   @StringField({
-    description: 'Contact person position',
+    description: 'Position in the study team',
     example: 'Senior Research Program Manager',
     nullable: true,
   })
@@ -51,25 +51,17 @@ export class Contact {
   position: string;
 
   @StringField({
-    description: 'Name of the designated contact person',
-    example: 'Dr. Eva Periche-Tomas',
+    description: 'Contribution summary',
+    example:
+      'Leads protocol design, site training, and ongoing trial oversight.',
     nullable: true,
   })
   @Expose()
   @Prop({ default: null })
-  contact_name: string;
+  contribute: string;
 
   @StringField({
-    description: 'Official trial or study website URL',
-    example: 'https://aclstarr.com',
-    nullable: true,
-  })
-  @Expose()
-  @Prop({ default: null })
-  website: string;
-
-  @StringField({
-    description: 'Contact avatar URL',
+    description: 'Avatar URL',
     example: '',
     nullable: true,
   })

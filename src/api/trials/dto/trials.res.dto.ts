@@ -1,4 +1,3 @@
-import { StudyTeamMembersResDto } from '@/api/study-team-members/dto/study-team-members.res.dto';
 import {
   Commitment,
   Contact,
@@ -7,6 +6,8 @@ import {
   Overview,
   Participant,
   Result,
+  StudyProcedure,
+  StudyTeamMember,
   StudyDesign,
 } from '@/api/trials/interfaces';
 import { AuditResDto } from '@/common/dto/response/audit.dto';
@@ -43,15 +44,21 @@ export class TrialsResDto extends AuditResDto {
   @Expose()
   contact: Contact;
 
-  @ClassField(() => StudyTeamMembersResDto, { isArray: true })
+  @ClassField(() => StudyTeamMember, { isArray: true })
+  @Type(() => StudyTeamMember)
   @Expose()
-  study_team: StudyTeamMembersResDto[];
+  study_team: StudyTeamMember[];
 
   @StringField({ isArray: true })
   @Expose()
   benefits: string[];
   @StringField({ isArray: true }) @Expose() risks: string[];
   @StringField({ isArray: true }) @Expose() compensations: string[];
+
+  @ClassField(() => StudyProcedure, { isArray: true })
+  @Type(() => StudyProcedure)
+  @Expose()
+  study_procedures: StudyProcedure[];
 
   @ClassField(() => Ethical)
   @Type(() => Ethical)

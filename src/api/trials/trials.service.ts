@@ -96,7 +96,6 @@ export class TrialsService {
     const trials = await this.trialModel
       .find(filter)
       .sort({ createdAt: -1 })
-      .populate('study_team')
       .lean();
 
     return new ResponseDto<TrialsResDto[]>({
@@ -351,7 +350,6 @@ export class TrialsService {
       {
         skipCount: false,
         takeAll: false,
-        populate: ['study_team'],
       },
     );
 
@@ -544,7 +542,7 @@ export class TrialsService {
   }
 
   async findById(id: Types.ObjectId): Promise<ResponseDto<TrialsResDto>> {
-    const trial = await this.trialModel.findById(id).populate('study_team');
+    const trial = await this.trialModel.findById(id);
 
     if (!trial) {
       return new ResponseDto<TrialsResDto>({
@@ -583,7 +581,6 @@ export class TrialsService {
       {
         skipCount: false,
         takeAll: false,
-        populate: ['study_team'],
       },
     );
 

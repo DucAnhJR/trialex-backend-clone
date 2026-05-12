@@ -6,3 +6,5 @@ export * from './overview.interface';
 export * from './participant.interface';
 export * from './result.interface';
 export * from './study-design.interface';
+export * from './study-team.interface';
+export * from './study-procedure.interface';
