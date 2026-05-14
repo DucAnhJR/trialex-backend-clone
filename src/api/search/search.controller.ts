@@ -16,7 +16,7 @@ export class SearchController {
     description:
       'Search discover.title, publications.title, trials.overview.name, trials.overview.full_name',
   })
-  search(@Query() query: SearchQueryDto): Promise<ResponseDto<any[]>> {
+  search(@Query() query: SearchQueryDto): Promise<ResponseDto<unknown[]>> {
     return this.searchService.search(query);
   }
 }

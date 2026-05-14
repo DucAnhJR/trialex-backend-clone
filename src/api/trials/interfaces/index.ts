@@ -1,3 +1,4 @@
+export * from './about.interface';
 export * from './commitment.interface';
 export * from './contact.interface';
 export * from './ethical.interface';
@@ -6,5 +7,5 @@ export * from './overview.interface';
 export * from './participant.interface';
 export * from './result.interface';
 export * from './study-design.interface';
-export * from './study-team.interface';
 export * from './study-procedure.interface';
+export * from './study-team.interface';

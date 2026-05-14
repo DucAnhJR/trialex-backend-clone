@@ -1,4 +1,5 @@
 import {
+  About,
   Commitment,
   Contact,
   Ethical,
@@ -6,9 +7,9 @@ import {
   Overview,
   Participant,
   Result,
+  StudyDesign,
   StudyProcedure,
   StudyTeamMember,
-  StudyDesign,
 } from '@/api/trials/interfaces';
 import { AuditResDto } from '@/common/dto/response/audit.dto';
 import {
@@ -39,10 +40,10 @@ export class TrialsResDto extends AuditResDto {
   @Type(() => Commitment)
   @Expose()
   commitment: Commitment;
-  @ClassField(() => Contact)
+  @ClassField(() => Contact, { isArray: true })
   @Type(() => Contact)
   @Expose()
-  contact: Contact;
+  contact: Contact[];
 
   @ClassField(() => StudyTeamMember, { isArray: true })
   @Type(() => StudyTeamMember)
@@ -60,6 +61,11 @@ export class TrialsResDto extends AuditResDto {
   @Expose()
   study_procedures: StudyProcedure[];
 
+  @ClassField(() => About, { isArray: true })
+  @Type(() => About)
+  @Expose()
+  about: About[];
+
   @ClassField(() => Ethical)
   @Type(() => Ethical)
   @Expose()
@@ -71,6 +77,7 @@ export class TrialsResDto extends AuditResDto {
 
   @StringField({ nullable: true }) @Expose() logo: string;
   @StringField({ nullable: true }) @Expose() icon: string;
+  @StringField({ nullable: true }) @Expose() video_url: string;
   @StringField({ nullable: true }) @Expose() referal_code: string;
   @StringField({ nullable: true }) @Expose() recruitment_status: string;
   @StringField({ nullable: true }) @Expose() trial_status: string;

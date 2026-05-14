@@ -1,12 +1,17 @@
 import { ResponseDto } from '@/common/dto/response/response.dto';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { plainToInstance } from 'class-transformer';
 import { Model } from 'mongoose';
-import { Discover, DiscoverDocument } from '../discover/schemas/discover.schema';
+import {
+  Discover,
+  DiscoverDocument,
+} from '../discover/schemas/discover.schema';
 import {
   Publication,
   PublicationDocument,
 } from '../publication/schemas/publication.schema';
+import { TrialsResDto } from '../trials/dto/trials.res.dto';
 import { Trials, TrialsDocument } from '../trials/schemas/trials.schema';
 import { SearchQueryDto } from './dto/search.query.dto';
 
@@ -19,6 +24,13 @@ interface SearchItem {
   item: Record<string, unknown>;
 }
 
+interface SearchTrialItem extends Omit<SearchItem, 'type' | 'item'> {
+  type: 'trials';
+  item: TrialsResDto;
+}
+
+type SearchResultItem = SearchItem | SearchTrialItem;
+
 @Injectable()
 export class SearchService {
   constructor(
@@ -28,12 +40,14 @@ export class SearchService {
     @InjectModel(Trials.name) private trialModel: Model<TrialsDocument>,
   ) {}
 
-  async search(query: SearchQueryDto): Promise<ResponseDto<SearchItem[]>> {
+  async search(
+    query: SearchQueryDto,
+  ): Promise<ResponseDto<SearchResultItem[]>> {
     const keyword = (query.q || '').trim();
     const limit = Math.min(Math.max(query.limit || 20, 1), 50);
 
     if (!keyword) {
-      return new ResponseDto<SearchItem[]>({
+      return new ResponseDto<SearchResultItem[]>({
         data: [],
         message: 'Search result fetched successfully',
       });
@@ -42,8 +56,16 @@ export class SearchService {
     const regex = new RegExp(this.escapeRegExp(keyword), 'i');
 
     const [discovers, publications, trials] = await Promise.all([
-      this.discoverModel.find({ title: regex }).sort({ createdAt: -1 }).limit(limit).lean(),
-      this.publicationModel.find({ title: regex }).sort({ createdAt: -1 }).limit(limit).lean(),
+      this.discoverModel
+        .find({ title: regex })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
+      this.publicationModel
+        .find({ title: regex })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
       this.trialModel
         .find({
           $or: [{ 'overview.name': regex }, { 'overview.full_name': regex }],
@@ -73,17 +95,17 @@ export class SearchService {
       },
     }));
 
-    const trialItems: SearchItem[] = trials.map((doc) => ({
+    const trialItems: SearchTrialItem[] = trials.map((doc) => ({
       id: doc._id.toString(),
       type: 'trials',
       title: doc.overview?.name || doc.overview?.full_name || 'Untitled',
-      item: {
+      item: plainToInstance(TrialsResDto, {
         ...doc,
         _id: doc._id.toString(),
-      },
+      }),
     }));
 
-    return new ResponseDto<SearchItem[]>({
+    return new ResponseDto<SearchResultItem[]>({
       data: [...discoverItems, ...publicationItems, ...trialItems],
       message: 'Search result fetched successfully',
     });

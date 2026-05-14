@@ -1,4 +1,5 @@
 import {
+  About,
   Commitment,
   Contact,
   Ethical,
@@ -6,9 +7,9 @@ import {
   Overview,
   Participant,
   Result,
+  StudyDesign,
   StudyProcedure,
   StudyTeamMember,
-  StudyDesign,
 } from '@/api/trials/interfaces';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
@@ -81,19 +82,10 @@ export class Trials {
   commitment: Commitment;
 
   @Prop({
-    type: Contact,
-    default: () => ({
-      principal_investigator: null,
-      sponsor: null,
-      email: null,
-      phone: null,
-      position: null,
-      contact_name: null,
-      website: null,
-      avatar: '',
-    }),
+    type: [Contact],
+    default: [],
   })
-  contact: Contact;
+  contact: Contact[];
 
   @Prop({ type: [String], default: [] })
   benefits: string[];
@@ -104,6 +96,9 @@ export class Trials {
 
   @Prop({ type: [StudyProcedure], default: [] })
   study_procedures: StudyProcedure[];
+
+  @Prop({ type: [About], default: [] })
+  about: About[];
 
   @Prop({
     type: Ethical,
@@ -132,6 +127,9 @@ export class Trials {
 
   @Prop({ default: '' })
   icon: string;
+
+  @Prop({ default: '' })
+  video_url: string;
 
   @Prop({ type: String, unique: true, sparse: true, match: /^\d{6}$/ })
   referal_code: string;
