@@ -32,6 +32,15 @@ export class StudyTeamMember {
   email: string;
 
   @StringField({
+    description: 'Team member website',
+    example: 'https://aclstarr.com',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: '' })
+  website: string;
+
+  @StringField({
     description: 'Contact phone number',
     example: '61412345678',
     nullable: true,
@@ -49,6 +58,15 @@ export class StudyTeamMember {
   @Expose()
   @Prop({ default: null })
   position: string;
+
+  @StringField({
+    description: 'Team member gender',
+    example: 'female',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: '' })
+  gender: string;
 
   @StringField({
     description: 'Contribution summary',

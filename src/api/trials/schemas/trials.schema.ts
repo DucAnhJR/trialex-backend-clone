@@ -4,6 +4,7 @@ import {
   Contact,
   Ethical,
   Location,
+  NoticeBoardItem,
   Overview,
   Participant,
   Result,
@@ -99,6 +100,9 @@ export class Trials {
 
   @Prop({ type: [About], default: [] })
   about: About[];
+
+  @Prop({ type: [NoticeBoardItem], default: [] })
+  notice_board: NoticeBoardItem[];
 
   @Prop({
     type: Ethical,

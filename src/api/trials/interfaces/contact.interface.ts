@@ -65,7 +65,7 @@ export class Contact {
     nullable: true,
   })
   @Expose()
-  @Prop({ default: null })
+  @Prop({ default: '' })
   website: string;
 
   @StringField({

@@ -4,6 +4,7 @@ import {
   Contact,
   Ethical,
   Location,
+  NoticeBoardItem,
   Overview,
   Participant,
   Result,
@@ -18,6 +19,25 @@ import {
   StringField,
 } from '@/decorators/field.decorators';
 import { Expose, Type } from 'class-transformer';
+
+export class FaqItem {
+  @StringField({
+    description: 'FAQ question',
+    example: 'What is an ACL injury?',
+    nullable: true,
+  })
+  @Expose()
+  question: string;
+
+  @StringField({
+    description: 'FAQ answer',
+    example:
+      'Anterior cruciate ligament - ACL is 1 of 4 main ligaments of the knee and connects the tibia (shin bone) and the femur (thigh bone).',
+    nullable: true,
+  })
+  @Expose()
+  answer: string;
+}
 
 export class TrialsResDto extends AuditResDto {
   @ClassField(() => Overview)
@@ -65,6 +85,16 @@ export class TrialsResDto extends AuditResDto {
   @Type(() => About)
   @Expose()
   about: About[];
+
+  @ClassField(() => NoticeBoardItem, { isArray: true })
+  @Type(() => NoticeBoardItem)
+  @Expose()
+  notice_board: NoticeBoardItem[];
+
+  @ClassField(() => FaqItem, { isArray: true })
+  @Type(() => FaqItem)
+  @Expose()
+  faqs: FaqItem[];
 
   @ClassField(() => Ethical)
   @Type(() => Ethical)
