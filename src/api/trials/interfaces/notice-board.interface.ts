@@ -20,6 +20,14 @@ export class NoticeBoardLike {
 
 export class NoticeBoardItem {
   @StringField({
+    description: 'Notice board item ID',
+    example: '67b93550f81beed12ab81418',
+    nullable: true,
+  })
+  @Expose()
+  _id: string;
+
+  @StringField({
     description: 'Notice title',
     example: 'ACL-STARR Update',
     nullable: true,

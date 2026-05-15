@@ -14,11 +14,16 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
+import {
+  LikeNoticeBoardDto,
+  NoticeBoardActionDto,
+} from './dto/notice-board-action.dto';
 import { QueryTrialsRecord } from './dto/query-active-trials-record.dto';
 import { UpdateReferralCodeDto } from './dto/referral-code.dto';
 import { TrialsRecordResDto } from './dto/trials-record.res.dto';
 import { TrialsResDto } from './dto/trials.res.dto';
 import { UpdateTrialRecord } from './dto/update-trial-record.dto';
+import { NoticeBoardItem } from './interfaces';
 import { TrialsService } from './trials.service';
 
 @ApiTags('Trials')
@@ -115,6 +120,32 @@ export class TrialsController {
   })
   async getAllTrials(@Query() query: PageOptionsDto) {
     return this.trialsService.findAll(query);
+  }
+
+  @Post('notice_board/like')
+  @ApiAuth({
+    description: 'Like or unlike a notice board item',
+    summary: 'Like or Unlike Notice Board',
+    type: NoticeBoardItem,
+  })
+  async likeNoticeBoard(
+    @Body() dto: LikeNoticeBoardDto,
+    @CurrentUser('id') userId: Types.ObjectId,
+  ) {
+    return this.trialsService.likeNoticeBoard(userId, dto);
+  }
+
+  @Post('notice_board/mark_read')
+  @ApiAuth({
+    description: 'Mark a notice board item as read',
+    summary: 'Mark Read Notice Board',
+    type: NoticeBoardItem,
+  })
+  async markReadNoticeBoard(
+    @Body() dto: NoticeBoardActionDto,
+    @CurrentUser('id') userId: Types.ObjectId,
+  ) {
+    return this.trialsService.markReadNoticeBoard(userId, dto);
   }
 
   @Get(':id')

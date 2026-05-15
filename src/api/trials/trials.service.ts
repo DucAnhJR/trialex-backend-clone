@@ -17,11 +17,16 @@ import {
   TrialPreferenceDocument,
 } from '../users/schemas/trial-preference.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
+import {
+  LikeNoticeBoardDto,
+  NoticeBoardActionDto,
+} from './dto/notice-board-action.dto';
 import { QueryTrialsRecord } from './dto/query-active-trials-record.dto';
 import { UpdateReferralCodeDto } from './dto/referral-code.dto';
 import { TrialsRecordResDto } from './dto/trials-record.res.dto';
 import { TrialsResDto } from './dto/trials.res.dto';
 import { UpdateTrialRecord } from './dto/update-trial-record.dto';
+import { NoticeBoardItem } from './interfaces';
 import {
   TrialsRecord,
   TrialsRecordDocument,
@@ -560,6 +565,107 @@ export class TrialsService {
     });
   }
 
+  async likeNoticeBoard(
+    userId: Types.ObjectId,
+    dto: LikeNoticeBoardDto,
+  ): Promise<ResponseDto<NoticeBoardItem>> {
+    const trialId = new Types.ObjectId(dto.trialId);
+    const noticeBoardId = new Types.ObjectId(dto.noticeBoardId);
+    const userIdString = userId.toString();
+
+    await this.validateNoticeBoardItem(trialId, noticeBoardId);
+
+    if (dto.like) {
+      await this.trialModel.updateOne(
+        { _id: trialId },
+        {
+          $addToSet: {
+            'notice_board.$[notice].likes': { userId: userIdString },
+          },
+          $inc: { 'notice_board.$[notice].like_count': 1 },
+        },
+        {
+          arrayFilters: [
+            {
+              'notice._id': noticeBoardId,
+              'notice.likes.userId': { $ne: userIdString },
+            },
+          ],
+        },
+      );
+    } else {
+      await this.trialModel.updateOne(
+        { _id: trialId },
+        {
+          $pull: {
+            'notice_board.$[notice].likes': { userId: userIdString },
+          },
+          $inc: { 'notice_board.$[notice].like_count': -1 },
+        },
+        {
+          arrayFilters: [
+            {
+              'notice._id': noticeBoardId,
+              'notice.likes.userId': userIdString,
+            },
+          ],
+        },
+      );
+    }
+
+    const noticeBoardItem = await this.getNoticeBoardItem(
+      trialId,
+      noticeBoardId,
+    );
+
+    return new ResponseDto<NoticeBoardItem>({
+      data: plainToInstance(NoticeBoardItem, noticeBoardItem, {
+        excludeExtraneousValues: true,
+      }),
+      message: dto.like ? 'Notice board liked' : 'Notice board unliked',
+    });
+  }
+
+  async markReadNoticeBoard(
+    userId: Types.ObjectId,
+    dto: NoticeBoardActionDto,
+  ): Promise<ResponseDto<NoticeBoardItem>> {
+    const trialId = new Types.ObjectId(dto.trialId);
+    const noticeBoardId = new Types.ObjectId(dto.noticeBoardId);
+    const userIdString = userId.toString();
+
+    await this.validateNoticeBoardItem(trialId, noticeBoardId);
+
+    await this.trialModel.updateOne(
+      { _id: trialId },
+      {
+        $addToSet: {
+          'notice_board.$[notice].mark_reads': { userId: userIdString },
+        },
+      },
+      {
+        arrayFilters: [
+          {
+            'notice._id': noticeBoardId,
+            'notice.mark_reads.userId': { $ne: userIdString },
+          },
+        ],
+      },
+    );
+
+    const noticeBoardItem = await this.getNoticeBoardItem(
+      trialId,
+      noticeBoardId,
+    );
+
+    return new ResponseDto<NoticeBoardItem>({
+      data: plainToInstance(NoticeBoardItem, noticeBoardItem, {
+        excludeExtraneousValues: true,
+      }),
+      message: 'Notice board marked as read',
+    });
+  }
+
   async findAll(
     query: PageOptionsDto,
   ): Promise<OffsetPaginatedDto<TrialsResDto>> {
@@ -677,6 +783,40 @@ export class TrialsService {
     const buf = crypto.randomBytes(4);
     const num = buf.readUInt32BE() % 1000000;
     return num.toString().padStart(6, '0');
+  }
+
+  private async validateNoticeBoardItem(
+    trialId: Types.ObjectId,
+    noticeBoardId: Types.ObjectId,
+  ): Promise<void> {
+    const exists = await this.trialModel.exists({
+      _id: trialId,
+      'notice_board._id': noticeBoardId,
+    });
+
+    if (!exists) {
+      throw new BadRequestException('Notice board item not found');
+    }
+  }
+
+  private async getNoticeBoardItem(
+    trialId: Types.ObjectId,
+    noticeBoardId: Types.ObjectId,
+  ): Promise<NoticeBoardItem> {
+    const trial = await this.trialModel
+      .findOne(
+        { _id: trialId, 'notice_board._id': noticeBoardId },
+        { 'notice_board.$': 1 },
+      )
+      .lean();
+
+    const noticeBoardItem = trial?.notice_board?.[0];
+
+    if (!noticeBoardItem) {
+      throw new BadRequestException('Notice board item not found');
+    }
+
+    return noticeBoardItem;
   }
 
   private escapeRegex(value: string): string {
