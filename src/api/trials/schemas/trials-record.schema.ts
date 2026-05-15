@@ -49,6 +49,15 @@ export class TrialsRecord extends Document {
   })
   appointments: Types.ObjectId[];
 
+  @Prop({ type: [Types.ObjectId], default: [] })
+  milestones: Types.ObjectId[];
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  total_milestones: number;
+
+  @Prop({ type: Number, default: 0, min: 0 })
+  total_milestones_completed: number;
+
   @Prop({ type: Number, default: 0, min: 0 })
   number_of_badges: number;
 }

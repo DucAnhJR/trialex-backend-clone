@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
+import { MarkMilestoneCompletedDto } from './dto/mark-milestone-completed.dto';
 import {
   LikeNoticeBoardDto,
   NoticeBoardActionDto,
@@ -146,6 +147,16 @@ export class TrialsController {
     @CurrentUser('id') userId: Types.ObjectId,
   ) {
     return this.trialsService.markReadNoticeBoard(userId, dto);
+  }
+
+  @Post('mark_milestone_completed')
+  @ApiAuth({
+    description: 'Mark a trial milestone as completed for a trial record',
+    summary: 'Mark Milestone Completed',
+    type: TrialsRecordResDto,
+  })
+  async markMilestoneCompleted(@Body() dto: MarkMilestoneCompletedDto) {
+    return this.trialsService.markMilestoneCompleted(dto);
   }
 
   @Get(':id')

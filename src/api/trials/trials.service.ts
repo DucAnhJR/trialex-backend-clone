@@ -17,6 +17,7 @@ import {
   TrialPreferenceDocument,
 } from '../users/schemas/trial-preference.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
+import { MarkMilestoneCompletedDto } from './dto/mark-milestone-completed.dto';
 import {
   LikeNoticeBoardDto,
   NoticeBoardActionDto,
@@ -126,16 +127,14 @@ export class TrialsService {
       });
     }
 
-    const data = {
-      ...trialRecord.toObject(),
-      trial: trialRecord.trial_id,
-      trial_id: trialRecord.trial_id?._id?.toString() ?? trialRecord.trial_id,
-    };
-
     return new ResponseDto<TrialsRecordResDto>({
-      data: plainToInstance(TrialsRecordResDto, data, {
-        excludeExtraneousValues: true,
-      }),
+      data: plainToInstance(
+        TrialsRecordResDto,
+        this.toTrialRecordResponse(trialRecord),
+        {
+          excludeExtraneousValues: true,
+        },
+      ),
       message: 'Retrieved trial record successfully',
     });
   }
@@ -231,6 +230,8 @@ export class TrialsService {
       is_active: true,
       trial_status: TrialStatus.PENDING,
       sign_up_date: new Date(),
+      total_milestones: this.getTotalMilestones(trial),
+      total_milestones_completed: 0,
     });
 
     return new ResponseNoDataDto({
@@ -530,6 +531,8 @@ export class TrialsService {
     const trialRecord = await this.trialsRecordModel.create({
       trial_id: trialId,
       user_id: userId,
+      total_milestones: this.getTotalMilestones(trials),
+      total_milestones_completed: 0,
     });
 
     const trialRecordObj = trialRecord.toObject();
@@ -666,6 +669,80 @@ export class TrialsService {
     });
   }
 
+  async markMilestoneCompleted(
+    dto: MarkMilestoneCompletedDto,
+  ): Promise<ResponseDto<TrialsRecordResDto>> {
+    const milestoneId = new Types.ObjectId(dto.milestone_id);
+    const trialRecordId = new Types.ObjectId(dto.trial_record_id);
+
+    const trialRecord = await this.trialsRecordModel.findById(trialRecordId);
+
+    if (!trialRecord) {
+      throw new BadRequestException('Trial record not found');
+    }
+
+    if (trialRecord.trial_status !== TrialStatus.IN_PROGRESS) {
+      throw new BadRequestException('Trial record is not in progress');
+    }
+
+    const trial = await this.trialModel.findOne({
+      'overview.milestones._id': milestoneId,
+    });
+
+    if (!trial) {
+      throw new BadRequestException('Milestone not found');
+    }
+
+    if (trialRecord.trial_id.toString() !== trial._id.toString()) {
+      throw new BadRequestException(
+        'Milestone does not belong to the trial record trial',
+      );
+    }
+
+    let updatedRecord = await this.trialsRecordModel.findByIdAndUpdate(
+      trialRecordId,
+      {
+        $set: {
+          total_milestones: this.getTotalMilestones(trial),
+        },
+        $addToSet: {
+          milestones: milestoneId,
+        },
+      },
+      { new: true },
+    );
+
+    if (updatedRecord) {
+      updatedRecord = await this.trialsRecordModel.findByIdAndUpdate(
+        trialRecordId,
+        {
+          $set: {
+            total_milestones_completed: updatedRecord.milestones.length,
+          },
+        },
+        { new: true },
+      );
+    }
+
+    if (updatedRecord) {
+      await this.userModel.updateOne(
+        { _id: trialRecord.user_id, 'trial_records._id': trialRecord._id },
+        {
+          $set: {
+            'trial_records.$': updatedRecord.toObject(),
+          },
+        },
+      );
+    }
+
+    return new ResponseDto<TrialsRecordResDto>({
+      data: plainToInstance(TrialsRecordResDto, updatedRecord, {
+        excludeExtraneousValues: true,
+      }),
+      message: 'Milestone marked as completed successfully',
+    });
+  }
+
   async findAll(
     query: PageOptionsDto,
   ): Promise<OffsetPaginatedDto<TrialsResDto>> {
@@ -738,12 +815,57 @@ export class TrialsService {
     );
 
     return new OffsetPaginatedDto<TrialsRecordResDto>({
-      data: plainToInstance(TrialsRecordResDto, records, {
-        excludeExtraneousValues: true,
-      }),
+      data: plainToInstance(
+        TrialsRecordResDto,
+        records.map((record) => this.toTrialRecordResponse(record)),
+        {
+          excludeExtraneousValues: true,
+        },
+      ),
       meta: metaDto,
       message: 'Retrieved active trials successfully',
     });
+  }
+
+  private toTrialRecordResponse(record: unknown) {
+    const data =
+      record &&
+      typeof (record as { toObject?: unknown }).toObject === 'function'
+        ? (record as { toObject: () => Record<string, unknown> }).toObject()
+        : (record as Record<string, unknown>);
+    const trial = data?.trial_id;
+    const trialId =
+      trial && typeof trial === 'object' && '_id' in trial
+        ? (trial as { _id: unknown })._id
+        : trial;
+    const trialMilestones =
+      trial &&
+      typeof trial === 'object' &&
+      'overview' in trial &&
+      Array.isArray(
+        (trial as { overview?: { milestones?: unknown[] } }).overview
+          ?.milestones,
+      )
+        ? (trial as { overview: { milestones: unknown[] } }).overview.milestones
+        : null;
+    const completedMilestones = Array.isArray(data?.milestones)
+      ? data.milestones
+      : [];
+
+    return {
+      ...data,
+      trial,
+      trial_id: trialId,
+      total_milestones: data?.total_milestones ?? trialMilestones?.length ?? 0,
+      total_milestones_completed:
+        data?.total_milestones_completed ?? completedMilestones.length,
+    };
+  }
+
+  private getTotalMilestones(trial: TrialsDocument): number {
+    return Array.isArray(trial.overview?.milestones)
+      ? trial.overview.milestones.length
+      : 0;
   }
 
   private async validateTrialAndUser(

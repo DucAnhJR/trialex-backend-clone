@@ -1,7 +1,32 @@
-import { DateField, StringField } from '@/decorators/field.decorators';
+import {
+  ClassField,
+  DateField,
+  StringField,
+} from '@/decorators/field.decorators';
 import { Prop } from '@nestjs/mongoose';
-import { Expose } from 'class-transformer';
+import { Expose, Transform } from 'class-transformer';
+import { Types } from 'mongoose';
 import { Description } from './description.interface';
+
+export class TrialMilestone {
+  @StringField({
+    description: 'Milestone ID',
+    example: '68d608f0363eff5322aefb7a',
+  })
+  @Expose()
+  @Transform(({ value }) => value?.toString())
+  @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
+  _id: Types.ObjectId;
+
+  @StringField({
+    description: 'Milestone title',
+    example: 'Milestone 1',
+    nullable: true,
+  })
+  @Expose()
+  @Prop({ default: null })
+  title: string;
+}
 
 export class Overview {
   @StringField({
@@ -58,15 +83,13 @@ export class Overview {
   @Prop({ default: null })
   medical_condition: string;
 
-  @StringField({
+  @ClassField(() => TrialMilestone, {
     description: 'List of milestones for the trial',
-    example: ['Milestone 1', 'Milestone 2'],
     isArray: true,
-    nullable: true,
   })
   @Expose()
-  @Prop({ type: [String], default: null })
-  milestones: string[];
+  @Prop({ type: [TrialMilestone], default: [] })
+  milestones: TrialMilestone[];
 
   @StringField({
     description: 'Detailed description of the trial',
@@ -87,7 +110,8 @@ export class Overview {
 
   @StringField({
     description: 'Full official name of the trial',
-    example: 'Anterior Cruciate Ligament Stratified Accelerated Repair or Reconstruction',
+    example:
+      'Anterior Cruciate Ligament Stratified Accelerated Repair or Reconstruction',
     nullable: true,
   })
   @Expose()

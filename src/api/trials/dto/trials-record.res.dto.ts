@@ -15,20 +15,21 @@ export class TrialsRecordResDto {
     description: 'Trial Record ID',
   })
   @Expose()
+  @Transform(({ value }) => value?.toString())
   _id: string;
 
   @StringField({
     description: 'User Record ID',
   })
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @Transform(({ value }) => value?._id?.toString() ?? value?.toString())
   user_id: string;
 
   @StringField({
     description: 'Trial ID',
   })
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @Transform(({ value }) => value?._id?.toString() ?? value?.toString())
   trial_id: string;
 
   @ClassField(() => TrialsResDto, {
@@ -73,9 +74,37 @@ export class TrialsRecordResDto {
   })
   @Expose()
   @Transform(({ value }) =>
-    Array.isArray(value) ? value.map((v) => v?.toString()) : value,
+    Array.isArray(value)
+      ? value.map((v) => v?._id?.toString() ?? v?.toString())
+      : [],
   )
   appointments: string[];
+
+  @StringField({
+    description: 'List of Trial Milestone IDs',
+    isArray: true,
+  })
+  @Expose()
+  @Transform(({ value }) =>
+    Array.isArray(value)
+      ? value.map((v) => v?._id?.toString() ?? v?.toString())
+      : [],
+  )
+  milestones: string[];
+
+  @NumberField({
+    description: 'Total milestones in the trial',
+    default: 0,
+  })
+  @Expose()
+  total_milestones: number;
+
+  @NumberField({
+    description: 'Total completed milestones in the trial record',
+    default: 0,
+  })
+  @Expose()
+  total_milestones_completed: number;
 
   @NumberField({
     description: 'Number of Badges',
