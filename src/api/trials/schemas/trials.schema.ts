@@ -66,6 +66,8 @@ export class Trials {
       postcodes: [],
       number: null,
       proximity: null,
+      latitude: null,
+      longitude: null,
       site_codes: [],
       is_multisite: false,
     }),

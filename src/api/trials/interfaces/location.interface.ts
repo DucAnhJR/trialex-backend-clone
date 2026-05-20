@@ -1,4 +1,4 @@
-import { StringField } from '@/decorators/field.decorators';
+import { NumberField, StringField } from '@/decorators/field.decorators';
 import { Prop } from '@nestjs/mongoose';
 import { Expose } from 'class-transformer';
 
@@ -37,6 +37,28 @@ export class Location {
   @Expose()
   @Prop({ default: null })
   proximity: string;
+
+  @NumberField({
+    description: 'Latitude of the primary trial location',
+    example: 51.5074,
+    nullable: true,
+    min: -90,
+    max: 90,
+  })
+  @Expose()
+  @Prop({ type: Number, default: null })
+  latitude: number;
+
+  @NumberField({
+    description: 'Longitude of the primary trial location',
+    example: -0.1278,
+    nullable: true,
+    min: -180,
+    max: 180,
+  })
+  @Expose()
+  @Prop({ type: Number, default: null })
+  longitude: number;
 
   @StringField({
     description: 'Site codes for each participating location',
