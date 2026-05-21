@@ -228,7 +228,7 @@ export class TrialsService {
       trial_id: trial._id,
       is_approved: true,
       is_active: true,
-      trial_status: TrialStatus.PENDING,
+      trial_status: TrialStatus.IN_PROGRESS,
       sign_up_date: new Date(),
       total_milestones: this.getTotalMilestones(trial),
       total_milestones_completed: 0,
