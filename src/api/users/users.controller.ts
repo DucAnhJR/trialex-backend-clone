@@ -16,6 +16,7 @@ import { Types } from 'mongoose';
 import { BaseUserResDto } from './dto/base-user.res.dto';
 import { CreateUserInformationDto } from './dto/create-user-information.dto';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 import { UpdatePersonalInfoDto } from './dto/update-personal-info.dto';
 import { UpdateSecurityDto } from './dto/update-security.dto';
 import { UpdateTrialsPreferencesDto } from './dto/update-trial-preferences.dto';
@@ -124,6 +125,18 @@ export class UsersController {
     @Body() body: UpdateSecurityDto,
   ) {
     return this.usersService.updateSecuritySettings(id, body);
+  }
+
+  @Patch('password')
+  @ApiAuth({
+    summary: 'Update user password',
+    description: 'Allows the current user to update their login password.',
+  })
+  updatePassword(
+    @CurrentUser('id') id: Types.ObjectId,
+    @Body() body: UpdatePasswordDto,
+  ) {
+    return this.usersService.updatePassword(id, body);
   }
 
   @Patch('notification')

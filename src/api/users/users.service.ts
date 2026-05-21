@@ -1,8 +1,10 @@
 import { CursorPaginationDto } from '@/common/dto/cursor-pagination/cursor-pagination.dto';
 import { PageOptionsDto } from '@/common/dto/cursor-pagination/page-options.dto';
 import { CursorPaginatedDto } from '@/common/dto/cursor-pagination/paginated.dto';
+import { ResponseNoDataDto } from '@/common/dto/response/response-no-data.dto';
 import { ResponseDto } from '@/common/dto/response/response.dto';
 import { buildPaginator } from '@/utils/cursor-pagination';
+import { hashPassword } from '@/utils/password.util';
 import {
   BadRequestException,
   Injectable,
@@ -21,6 +23,7 @@ import {
 import { BaseUserResDto } from './dto/base-user.res.dto';
 import { CreateUserInformationDto } from './dto/create-user-information.dto';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 import { UpdatePersonalInfoDto } from './dto/update-personal-info.dto';
 import { UpdateSecurityDto } from './dto/update-security.dto';
 import { UpdateTrialsPreferencesDto } from './dto/update-trial-preferences.dto';
@@ -203,6 +206,24 @@ export class UsersService {
     });
   }
 
+  async updatePassword(
+    id: Types.ObjectId,
+    body: UpdatePasswordDto,
+  ): Promise<ResponseNoDataDto> {
+    const user = await this.userModel.findById(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.password = await hashPassword(body.newPassword);
+    await user.save();
+
+    return new ResponseNoDataDto({
+      message: 'User password updated successfully',
+    });
+  }
+
   async updateNotificationSettings(
     id: Types.ObjectId,
     body: UpdateNotificationSettingsDto,
@@ -275,20 +296,23 @@ export class UsersService {
     const update = preferences.selected
       ? {
           $addToSet: {
-            trial_preferences: new Types.ObjectId(preferences.trialPreferenceId),
+            trial_preferences: new Types.ObjectId(
+              preferences.trialPreferenceId,
+            ),
           },
         }
       : {
           $pull: {
-            trial_preferences: new Types.ObjectId(preferences.trialPreferenceId),
+            trial_preferences: new Types.ObjectId(
+              preferences.trialPreferenceId,
+            ),
           },
         };
 
-    const updatedUser = await this.userModel.findByIdAndUpdate(
-      id,
-      update,
-      { new: true, runValidators: true },
-    );
+    const updatedUser = await this.userModel.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!updatedUser) {
       throw new BadRequestException('Failed to update trial preferences');
