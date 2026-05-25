@@ -22,6 +22,10 @@ function setupSwagger(app: INestApplication) {
       configService.getOrThrow('app.ngrokUrl', { infer: true }),
       'Ngrok',
     )
+    .addServer(
+      'https://trialex-backend-clone-production.up.railway.app',
+      'Production',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document, {
