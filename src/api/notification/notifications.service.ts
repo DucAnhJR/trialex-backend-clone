@@ -45,22 +45,29 @@ export class NotificationsService {
     dto: MarkReadDto,
     userId: Types.ObjectId,
   ): Promise<ResponseNoDataDto> {
-    const result = await this.notificationModel.updateOne(
+    const notification = await this.notificationModel.findOneAndUpdate(
       {
         _id: new Types.ObjectId(dto.notificationId),
-        userId,
-        isRead: false,
+        userId: new Types.ObjectId(userId),
       },
       {
-        isRead: true,
-        readAt: new Date(),
+        $set: {
+          isRead: true,
+          readAt: new Date(),
+        },
       },
+      { new: true },
     );
 
-    if (result.modifiedCount === 0) {
+    if (!notification) {
       this.logger.warn(
         `No notification marked as read for notificationId: ${dto.notificationId} and userId: ${userId}`,
       );
+
+      return new ResponseNoDataDto({
+        success: false,
+        message: 'Không tìm thấy thông báo',
+      });
     }
 
     return new ResponseNoDataDto({
@@ -100,6 +107,31 @@ export class NotificationsService {
 
     return new ResponseNoDataDto({
       message: 'Xoá tất cả thông báo thành công',
+    });
+  }
+
+  async deleteOne(
+    notificationId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<ResponseNoDataDto> {
+    const result = await this.notificationModel.deleteOne({
+      _id: new Types.ObjectId(notificationId),
+      userId: new Types.ObjectId(userId),
+    });
+
+    if (result.deletedCount === 0) {
+      this.logger.warn(
+        `No notification deleted for notificationId: ${notificationId} and userId: ${userId}`,
+      );
+
+      return new ResponseNoDataDto({
+        success: false,
+        message: 'Không tìm thấy thông báo',
+      });
+    }
+
+    return new ResponseNoDataDto({
+      message: 'Xoá thông báo thành công',
     });
   }
 

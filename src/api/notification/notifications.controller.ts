@@ -1,6 +1,15 @@
+import { ParseObjectIdPipe } from '@/common/pipes/objectid.pipe';
 import { CurrentUser } from '@/decorators/current-user.decorator';
 import { ApiAuth, ApiPublic } from '@/decorators/http.decorators';
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiParam, ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { MarkReadDto } from './dto/mark-read.dto';
@@ -52,6 +61,20 @@ export class NotificationsController {
   })
   async clearAll(@CurrentUser('id') userId: Types.ObjectId) {
     return this.notificationService.clearAll(userId);
+  }
+
+  @Delete(':id')
+  @ApiAuth({
+    summary: 'Xoá một thông báo',
+  })
+  async deleteOne(
+    @Param('id', ParseObjectIdPipe) id: string,
+    @CurrentUser('id') userId: Types.ObjectId,
+  ) {
+    return this.notificationService.deleteOne(
+      id as unknown as Types.ObjectId,
+      userId,
+    );
   }
 
   @Post('test/:id')
