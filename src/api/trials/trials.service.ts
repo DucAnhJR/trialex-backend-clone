@@ -809,7 +809,7 @@ export class TrialsService {
       query,
       {
         skipCount: false,
-        takeAll: false,
+        takeAll: true,
         populate: ['trial_id', 'appointments'],
       },
     );
