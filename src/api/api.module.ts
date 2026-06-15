@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { AuthModule } from './auth/auth.module';
+import { BannersModule } from './banners/banners.module';
 import { ChatModule } from './chat/chat.module';
-import { DiscoverModule } from './discover/discover.module';
 import { DeviceTokenModule } from './device-tokens/device-token.module';
+import { DiscoverModule } from './discover/discover.module';
 import { HealthModule } from './health/health.module';
 import { HomeModule } from './home/home.module';
 import { NotificationsModule } from './notification/notifications.module';
@@ -17,6 +18,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
+    BannersModule,
     NotificationsModule,
     DeviceTokenModule,
     DiscoverModule,
