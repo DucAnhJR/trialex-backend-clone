@@ -30,6 +30,7 @@
     "db:drop": "env-cmd ts-node ./node_modules/typeorm-extension/bin/cli.cjs db:drop",
     "seed:run": "env-cmd ts-node ./node_modules/typeorm-extension/bin/cli.cjs seed:run",
     "seed:discover": "env-cmd -f .env ts-node -r tsconfig-paths/register scripts/seed-discover.ts",
+    "seed:support": "env-cmd -f .env ts-node -r tsconfig-paths/register src/database/seeds/support.seed.ts",
     "seed:trial-preferences": "env-cmd -f .env ts-node -r tsconfig-paths/register scripts/seed-trial-preferences.ts",
     "seed:create": "env-cmd ts-node ./node_modules/typeorm-extension/bin/cli.cjs seed:create",
     "prepare": "husky || true",

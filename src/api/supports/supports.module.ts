@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { SupportFaq, SupportFaqSchema } from './schemas/support-faq.schema';
 import { Supports, SupportsSchema } from './schemas/supports.schema';
 import { SupportsController } from './supports.controller';
 import { SupportsService } from './supports.service';
@@ -10,6 +11,10 @@ import { SupportsService } from './supports.service';
       {
         name: Supports.name,
         schema: SupportsSchema,
+      },
+      {
+        name: SupportFaq.name,
+        schema: SupportFaqSchema,
       },
     ]),
   ],
