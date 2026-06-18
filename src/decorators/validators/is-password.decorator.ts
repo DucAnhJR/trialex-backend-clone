@@ -12,10 +12,10 @@ export function IsPassword(
       options: validationOptions,
       validator: {
         validate(value: string) {
-          return /^[\d!#$%&*@A-Z^a-z]*$/.test(value);
+          return typeof value === 'string' && /^\S+$/.test(value);
         },
         defaultMessage() {
-          return `$property is invalid`;
+          return `$property must not contain spaces`;
         },
       },
     });

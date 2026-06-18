@@ -14,7 +14,7 @@ export class SupportQuestion {
 
 const SupportQuestionSchema = SchemaFactory.createForClass(SupportQuestion);
 
-@Schema({ collection: 'support', versionKey: false })
+@Schema({ collection: 'supports', versionKey: false })
 export class SupportFaq {
   @Prop({ type: String, required: true, trim: true, unique: true })
   thread_title: string;

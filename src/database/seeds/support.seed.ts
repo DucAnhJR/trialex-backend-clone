@@ -13,7 +13,7 @@ async function main() {
     ssl: process.env.DATABASE_SSL_ENABLED === 'true',
   });
 
-  const collection = mongoose.connection.collection('support');
+  const collection = mongoose.connection.collection('supports');
   const result = await collection.bulkWrite(
     SUPPORT_FAQ_DATA.map((supportFaq) => ({
       updateOne: {

@@ -4,7 +4,7 @@ import { HydratedDocument, Types } from 'mongoose';
 
 export type SupportsDocument = HydratedDocument<Supports>;
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'reports', timestamps: true })
 export class Supports {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   requester_id: Types.ObjectId;

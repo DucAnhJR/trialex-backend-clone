@@ -16,7 +16,12 @@ import { createCacheKey } from '@/utils/cache.util';
 import { hashPassword, verifyPassword } from '@/utils/password.util';
 import { InjectQueue } from '@nestjs/bullmq';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtVerifyOptions } from '@nestjs/jwt';
@@ -34,6 +39,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshReqDto } from './dto/refresh.req.dto';
 import { RefreshResDto } from './dto/refresh.res.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SignUpDto } from './dto/sign-up.dto';
 import { SignInResDto } from './dto/signin.res.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { Session } from './schemas/session.schema';
@@ -220,17 +226,13 @@ export class AuthService {
     });
   }
 
-  async signUp(dto: LoginDto): Promise<ResponseDto<BaseUserResDto>> {
-    const { email, password } = dto;
+  async signUp(dto: SignUpDto): Promise<ResponseDto<BaseUserResDto>> {
+    const { email, password, information } = dto;
 
     const existingUser = await this.userModel.findOne({ email }).lean();
 
     if (existingUser) {
-      return new ResponseDto<BaseUserResDto>({
-        data: null,
-        success: false,
-        message: 'Email already in use',
-      });
+      throw new ConflictException('Email already exists');
     }
 
     const hashedPassword = await hashPassword(password);
@@ -238,6 +240,7 @@ export class AuthService {
     const newUser = await this.userModel.create({
       email,
       password: hashedPassword,
+      information,
     });
 
     return new ResponseDto<BaseUserResDto>({
@@ -300,7 +303,7 @@ export class AuthService {
       return new ResponseDto<SignInResDto>({
         data: null,
         success: false,
-        message: 'Email not found',
+        message: 'Invalid email or password',
       });
     }
 

@@ -12,6 +12,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshReqDto } from './dto/refresh.req.dto';
 import { RefreshResDto } from './dto/refresh.res.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SignUpDto } from './dto/sign-up.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 
 @ApiTags('Auth')
@@ -72,7 +73,7 @@ export class AuthController {
     description: 'Public endpoint for user registration',
     type: BaseUserResDto,
   })
-  async signUp(@Body() dto: LoginDto) {
+  async signUp(@Body() dto: SignUpDto) {
     return this.authService.signUp(dto);
   }
 
