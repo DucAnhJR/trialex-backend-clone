@@ -1,13 +1,21 @@
 import { PageOptionsDto } from '@/common/dto/cursor-pagination/page-options.dto';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Order } from '@/constants/app.constant';
+import {
+  BooleanFieldOptional,
+  EnumFieldOptional,
+  StringFieldOptional,
+} from '@/decorators/field.decorators';
 
 export class QueryNotificationDto extends PageOptionsDto {
-  @ApiPropertyOptional({ description: 'ID người gửi', type: String })
+  @EnumFieldOptional(() => Order, { default: Order.DESC })
+  override readonly order?: Order = Order.DESC;
+
+  @StringFieldOptional({ description: 'ID người gửi' })
   senderId?: string;
 
-  @ApiPropertyOptional({ description: 'Trạng thái đã đọc', type: Boolean })
+  @BooleanFieldOptional({ description: 'Trạng thái đã đọc' })
   isRead?: boolean;
 
-  @ApiPropertyOptional({ description: 'Loại thông báo', type: String })
+  @StringFieldOptional({ description: 'Loại thông báo' })
   type?: string;
 }

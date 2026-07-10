@@ -1,5 +1,6 @@
 import { ApiModule } from '@/api/api.module';
 import authConfig from '@/api/auth/config/auth.config';
+import notiConfig from '@/api/notification/config/noti.config';
 import { BackgroundModule } from '@/background/background.module';
 import appConfig from '@/config/app.config';
 import { AllConfigType } from '@/config/config.type';
@@ -37,6 +38,7 @@ function generateModulesSet() {
         authConfig,
         mailConfig,
         smsConfig,
+        notiConfig,
       ],
       envFilePath: ['.env'],
     }),

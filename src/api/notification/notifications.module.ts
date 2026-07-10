@@ -7,6 +7,7 @@ import { UsersModule } from '@/api/users/users.module';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ExpoConfig } from './config/expo.config';
+import { FirebaseConfig } from './config/firebase.config';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import {
@@ -24,7 +25,7 @@ import {
     UsersModule,
   ],
   controllers: [NotificationsController],
-  providers: [NotificationsService, ExpoConfig],
+  providers: [NotificationsService, ExpoConfig, FirebaseConfig],
   exports: [NotificationsService],
 })
 export class NotificationsModule {}

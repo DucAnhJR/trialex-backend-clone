@@ -39,8 +39,8 @@ export class WebhooksService {
     const senderId = webhookData.message?.user?.id;
     const messageId = webhookData.message?.id;
     const channelId = webhookData.channel_id;
+    const channelType = webhookData.channel_type || 'messaging';
     const messageText = webhookData.message?.text || 'You have a new message';
-    const members = webhookData.channel?.members || [];
 
     this.logger.log(`New message from ${senderId} in ${channelId}`);
 
@@ -51,8 +51,33 @@ export class WebhooksService {
       return;
     }
 
-    const receivers = members
-      .map((member) => member.user_id)
+    if (!channelId) {
+      this.logger.warn('Skip message.new webhook: missing channelId');
+      return;
+    }
+
+    const eventMemberIds = (webhookData.channel?.members || [])
+      .map((member) => member.user_id || member.user?.id)
+      .filter((memberId): memberId is string => Boolean(memberId));
+
+    let memberIds = eventMemberIds;
+
+    if (memberIds.length === 0) {
+      try {
+        memberIds = await this.client.getChannelMemberIds(
+          channelType,
+          channelId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to load members for channel ${channelType}:${channelId}`,
+          error,
+        );
+        return;
+      }
+    }
+
+    const receivers = [...new Set(memberIds)]
       .filter((memberId): memberId is string => Boolean(memberId))
       .filter((memberId) => memberId !== senderId)
       .filter((memberId) => Types.ObjectId.isValid(memberId));
@@ -71,6 +96,7 @@ export class WebhooksService {
         title: 'New Message',
         message: messageText,
         data: {
+          channelId,
           uri: `https://trialex.app/MainStack/Chat?channelId=${channelId}`,
         },
         type: NotificationTypeEnum.MESSAGE,
@@ -98,6 +124,6 @@ export class WebhooksService {
       );
     });
 
-    await Promise.allSettled(jobs);
+    await Promise.all(jobs);
   }
 }

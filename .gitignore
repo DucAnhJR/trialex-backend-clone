@@ -42,15 +42,9 @@ lerna-debug.log*
 !.vscode/extensions.json
 
 # dotenv environment variable files
-.env
-.env.local
-.env.test
 .env.test.local
-.env.development
 .env.development.local
-.env.staging
 .env.staging.local
-.env.production
 .env.production.local
 
 # temp directory
@@ -78,3 +72,4 @@ docs/.vuepress/dist
 /schemas
 
 /backup
+config.bat

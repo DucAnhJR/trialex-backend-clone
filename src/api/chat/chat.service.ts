@@ -24,4 +24,20 @@ export class ChatService {
   verifyWebhook(rawBody: string, signature: string): boolean {
     return this.client.verifyWebhook(rawBody, signature);
   }
+
+  async getChannelMemberIds(
+    channelType: string,
+    channelId: string,
+  ): Promise<string[]> {
+    const channel = this.client.channel(channelType, channelId);
+    const response = await channel.query({
+      state: true,
+      watch: false,
+      presence: false,
+    });
+
+    return (response.members || [])
+      .map((member) => member.user_id || member.user?.id)
+      .filter((memberId): memberId is string => Boolean(memberId));
+  }
 }

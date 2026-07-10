@@ -1,7 +1,6 @@
 import { CursorPaginationDto } from '@/common/dto/cursor-pagination/cursor-pagination.dto';
 import { CursorPaginatedDto } from '@/common/dto/cursor-pagination/paginated.dto';
 import { ResponseNoDataDto } from '@/common/dto/response/response-no-data.dto';
-import { Order } from '@/constants/app.constant';
 import { NotificationTypeEnum } from '@/database/enums/notification.enum';
 import { buildPaginator } from '@/utils/cursor-pagination';
 import { Injectable, Logger } from '@nestjs/common';
@@ -10,9 +9,14 @@ import { plainToInstance } from 'class-transformer';
 import { Expo, ExpoPushMessage, type ExpoPushTicket } from 'expo-server-sdk';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { DeviceTokenService } from '../device-tokens/device-token.service';
-import { DeviceToken } from '../device-tokens/schemas/device-tokens.schema';
+import {
+  DeviceToken,
+  DeviceTokenPlatform,
+  DeviceTokenProvider,
+} from '../device-tokens/schemas/device-tokens.schema';
 import { UsersService } from '../users/users.service';
 import { ExpoConfig } from './config/expo.config';
+import { FirebaseConfig } from './config/firebase.config';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { MarkReadDto } from './dto/mark-read.dto';
 import { NotificationResDto } from './dto/notification.res.dto';
@@ -35,6 +39,7 @@ export class NotificationsService {
     @InjectModel(DeviceToken.name)
     private deviceTokenModel: Model<DeviceToken>,
     private expoConfig: ExpoConfig,
+    private firebaseConfig: FirebaseConfig,
     private deviceTokenServices: DeviceTokenService,
     private userServices: UsersService,
   ) {
@@ -144,7 +149,7 @@ export class NotificationsService {
         limit: query.limit,
         order: query.order,
       },
-      paginationKeys: ['_id'],
+      paginationKeys: ['createdAt', '_id'],
     });
 
     const filter: FilterQuery<Notification> = {
@@ -161,15 +166,6 @@ export class NotificationsService {
 
     if (query.senderId) {
       filter.senderId = query.senderId;
-    }
-
-    const allowedSortBy = ['createdAt', 'updatedAt'];
-
-    if (query.sortBy) {
-      if (!allowedSortBy.includes(query.sortBy)) {
-        this.logger.warn(`Invalid sortBy value: ${query.sortBy}`);
-      }
-      filter['$sort'] = { [query.sortBy]: query.order === Order.DESC ? -1 : 1 };
     }
 
     const { cursor, data, totalCount } = await paginator.paginate(filter);
@@ -218,10 +214,18 @@ export class NotificationsService {
 
     const notification = await this.createNotification(dto);
 
+    if (userReceivedNoti.notifications?.push === false) {
+      this.logger.debug(
+        `Push notifications disabled for userId: ${dto.userId}. In-app notification only.`,
+      );
+      return notification;
+    }
+
     // Persist in-app notification even when push token is missing.
     const deviceTokens = await this.deviceTokenModel
       .find({
         userId: new Types.ObjectId(dto.userId),
+        $or: [{ active: true }, { active: { $exists: false } }],
       })
       .lean();
 
@@ -232,7 +236,7 @@ export class NotificationsService {
       return notification;
     }
 
-    const data = {
+    const data = this.stringifyPushData({
       ...Object.fromEntries(
         Object.entries(dto.data || {}).map(([key, value]) => [
           key,
@@ -242,30 +246,50 @@ export class NotificationsService {
       timestamp: new Date().toISOString(),
       notificationId: notification._id.toString(),
       uri: dto.data?.uri || '',
-      vibrate: !!userReceivedNoti.notifications.vibrate,
-    };
+      vibrate: !!userReceivedNoti.notifications?.vibrate,
+      type: dto.type,
+      title: dto.title,
+      body: dto.message,
+    });
 
-    const validTokens = deviceTokens
+    const fcmDeviceTokens = deviceTokens.filter(
+      (token) => token.provider === DeviceTokenProvider.FCM,
+    );
+
+    if (fcmDeviceTokens.length > 0) {
+      await this.sendFcmPushNotification(dto, data, fcmDeviceTokens);
+      return notification;
+    }
+
+    const expoDeviceTokens = deviceTokens.filter(
+      (token) => !token.provider || token.provider === DeviceTokenProvider.EXPO,
+    );
+
+    const validExpoTokens = expoDeviceTokens
       .filter((token) => Expo.isExpoPushToken(token.token))
       .map((token) => token.token);
-    const invalidTokens = deviceTokens
+    const invalidExpoTokens = expoDeviceTokens
       .filter((token) => !Expo.isExpoPushToken(token.token))
       .map((token) => token.token);
 
-    if (invalidTokens.length > 0) {
-      await this.handleInvalidTokens(dto.userId, invalidTokens);
+    if (invalidExpoTokens.length > 0) {
+      await this.handleInvalidTokens(
+        dto.userId,
+        invalidExpoTokens,
+        DeviceTokenProvider.EXPO,
+      );
     }
 
-    if (validTokens.length === 0) {
+    if (validExpoTokens.length === 0) {
       this.logger.warn(
-        `No valid Expo push tokens found for user ${dto.userId} - ${userReceivedNoti.email}`,
+        `No valid push tokens found for user ${dto.userId} - ${userReceivedNoti.email}`,
       );
 
       return notification;
     }
 
     const message: ExpoPushMessage = {
-      to: validTokens,
+      to: validExpoTokens,
       sound: 'default',
       title: dto.title,
       body: dto.message,
@@ -286,7 +310,7 @@ export class NotificationsService {
         }
       }
 
-      await this.handleExpoResponse(tickets, validTokens, dto.userId);
+      await this.handleExpoResponse(tickets, validExpoTokens, dto.userId);
     } catch (error) {
       this.logger.error('Failed to send push notification:', error);
     }
@@ -320,20 +344,147 @@ export class NotificationsService {
     });
 
     if (invalidTokens.length > 0) {
-      await this.handleInvalidTokens(userId, invalidTokens);
+      await this.handleInvalidTokens(
+        userId,
+        invalidTokens,
+        DeviceTokenProvider.EXPO,
+      );
     }
   }
 
   private async handleInvalidTokens(
     userId: Types.ObjectId,
     invalidTokens: string[],
+    provider?: DeviceTokenProvider,
   ) {
     this.logger.warn(
-      `Removing ${invalidTokens.length} invalid tokens for user ${userId}`,
+      `Deactivating ${invalidTokens.length} invalid tokens for user ${userId}`,
     );
 
     for (const token of invalidTokens) {
-      await this.deviceTokenServices.removeToken(userId, token);
+      await this.deviceTokenServices.deactivateToken(userId, token, provider);
     }
+  }
+
+  private async sendFcmPushNotification(
+    dto: SendPushNotificationDto,
+    data: Record<string, string>,
+    deviceTokens: Array<{
+      token: string;
+      platform?: DeviceTokenPlatform;
+    }>,
+  ) {
+    const messaging = this.firebaseConfig.getMessaging();
+
+    if (!messaging) {
+      this.logger.warn(
+        `Firebase Admin is not configured. FCM push notification not sent for userId: ${dto.userId}.`,
+      );
+      return;
+    }
+
+    const androidTokens = deviceTokens
+      .filter((item) => item.platform === DeviceTokenPlatform.ANDROID)
+      .map((item) => item.token);
+    const iosAndLegacyTokens = deviceTokens
+      .filter((item) => item.platform !== DeviceTokenPlatform.ANDROID)
+      .map((item) => item.token);
+
+    // Android receives high-priority data-only messages so Notifee owns the
+    // visible notification. iOS keeps an APNs alert for reliable delivery.
+    const messages = [
+      ...this.chunkArray(androidTokens, 500).map((tokens) => ({
+        tokens,
+        data,
+        android: {
+          priority: 'high' as const,
+        },
+      })),
+      ...this.chunkArray(iosAndLegacyTokens, 500).map((tokens) => ({
+        tokens,
+        notification: {
+          title: dto.title,
+          body: dto.message,
+        },
+        data,
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+            },
+          },
+        },
+      })),
+    ];
+
+    for (const message of messages) {
+      try {
+        const response = await messaging.sendEachForMulticast(message);
+
+        const invalidTokens = response.responses
+          .map((item, index) =>
+            item.success || !this.isInvalidFcmTokenError(item.error?.code)
+              ? null
+              : message.tokens[index],
+          )
+          .filter((token): token is string => Boolean(token));
+
+        if (invalidTokens.length > 0) {
+          await this.handleInvalidTokens(
+            dto.userId,
+            invalidTokens,
+            DeviceTokenProvider.FCM,
+          );
+        }
+
+        if (response.failureCount > 0) {
+          response.responses.forEach((item, index) => {
+            if (!item.success) {
+              this.logger.warn(
+                `FCM failure token=...${message.tokens[index].slice(-8)} code=${item.error?.code || 'unknown'} message=${item.error?.message || 'unknown'}`,
+              );
+            }
+          });
+          this.logger.warn(
+            `FCM sent with ${response.failureCount} failures for userId: ${dto.userId}`,
+          );
+        }
+
+        if (response.successCount > 0) {
+          this.logger.log(
+            `FCM delivered to ${response.successCount}/${message.tokens.length} tokens for notificationId=${data.notificationId}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error('Failed to send FCM push notification:', error);
+      }
+    }
+  }
+
+  private stringifyPushData(data: Record<string, unknown>) {
+    return Object.fromEntries(
+      Object.entries(data).map(([key, value]) => [
+        key,
+        value === undefined || value === null ? '' : String(value),
+      ]),
+    );
+  }
+
+  private isInvalidFcmTokenError(code?: string) {
+    return [
+      'messaging/invalid-registration-token',
+      'messaging/registration-token-not-registered',
+      'messaging/invalid-argument',
+    ].includes(code || '');
+  }
+
+  private chunkArray<T>(items: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size));
+    }
+
+    return chunks;
   }
 }

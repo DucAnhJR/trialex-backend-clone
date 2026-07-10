@@ -4,6 +4,10 @@ import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class Notification {
+  createdAt: Date;
+
+  updatedAt: Date;
+
   @Prop({ type: Types.ObjectId, ref: User.name, required: true })
   userId: Types.ObjectId;
 
@@ -35,3 +39,11 @@ export const NotificationSchema = SchemaFactory.createForClass(Notification);
 
 NotificationSchema.index({ isRead: 1 }, { name: 'idx_notification_isRead' });
 NotificationSchema.index({ type: 1 }, { name: 'idx_notification_type' });
+NotificationSchema.index(
+  { userId: 1, createdAt: -1, _id: -1 },
+  { name: 'idx_notification_user_created' },
+);
+NotificationSchema.index(
+  { userId: 1, isRead: 1, createdAt: -1, _id: -1 },
+  { name: 'idx_notification_user_read_created' },
+);
