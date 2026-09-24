@@ -4,8 +4,10 @@
 
 FROM node:20-alpine AS base
 
-# Install and use pnpm
-RUN npm install -g pnpm
+# Keep Docker on the exact pnpm version declared in package.json. Installing
+# the latest pnpm makes it try to switch to @pnpm/exe, which has no
+# linux-x64-musl binary for this Alpine image.
+RUN npm install -g pnpm@9.12.3
 
 #############################
 # BUILD FOR LOCAL DEVELOPMENT

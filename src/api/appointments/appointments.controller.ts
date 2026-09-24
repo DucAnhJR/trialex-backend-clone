@@ -46,8 +46,11 @@ export class AppointmentsController {
     type: AppointmentResDto,
     isPaginated: true,
   })
-  getUserAppointments(@Query() query: PageOptionsDto) {
-    return this.appointmentsService.findAll(query);
+  getUserAppointments(
+    @Query() query: PageOptionsDto,
+    @CurrentUser('id') userId: Types.ObjectId,
+  ) {
+    return this.appointmentsService.findAll(query, userId);
   }
 
   @Get(':id')

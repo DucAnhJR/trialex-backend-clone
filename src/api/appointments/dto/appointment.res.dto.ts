@@ -12,6 +12,13 @@ import { Expose, Transform } from 'class-transformer';
 import { IsMongoId } from 'class-validator';
 
 export class AppointmentResDto {
+  @StringField({
+    description: 'Appointment ID',
+  })
+  @Expose()
+  @Transform(({ value }) => value?.toString())
+  _id: string;
+
   @IsMongoId()
   @Expose()
   @Transform(({ value }) => value?.toString())

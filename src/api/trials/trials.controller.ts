@@ -54,9 +54,11 @@ export class TrialsController {
   })
   async getTrialRecordDetail(
     @Param('trialRecordId', ParseObjectIdPipe) trialRecordId: string,
+    @CurrentUser('id') userId: Types.ObjectId,
   ) {
     return this.trialsService.findTrialRecordById(
       trialRecordId as unknown as Types.ObjectId,
+      userId,
     );
   }
 
@@ -251,26 +253,6 @@ export class TrialsController {
       id as unknown as Types.ObjectId,
       userId,
     );
-  }
-
-  @Patch(':id/approve')
-  @ApiAuth({
-    description: 'Approve trial by ID',
-    summary: 'Approve Trial',
-    type: TrialsRecordResDto,
-  })
-  async approveTrial(@Param('id', ParseObjectIdPipe) id: string) {
-    return this.trialsService.approveTrial(id as unknown as Types.ObjectId);
-  }
-
-  @Patch(':id/decline')
-  @ApiAuth({
-    description: 'Decline trial by ID',
-    summary: 'Decline Trial',
-    type: TrialsRecordResDto,
-  })
-  async declineTrial(@Param('id', ParseObjectIdPipe) id: string) {
-    return this.trialsService.declineTrial(id as unknown as Types.ObjectId);
   }
 
   // save trial

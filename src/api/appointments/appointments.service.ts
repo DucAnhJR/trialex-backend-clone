@@ -3,6 +3,7 @@ import { OffsetPaginatedDto } from '@/common/dto/offset-pagination/paginated.dto
 import { ResponseNoDataDto } from '@/common/dto/response/response-no-data.dto';
 import { ResponseDto } from '@/common/dto/response/response.dto';
 import { AppointmentStatus } from '@/database/enums/appointment';
+import { TrialStatus } from '@/database/enums/trials.enum';
 import { paginateWithModel } from '@/utils/offset-pagination';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -12,10 +13,6 @@ import { TrialsRecord } from '../trials/schemas/trials-record.schema';
 import { AppointmentResDto } from './dto/appointment.res.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
-import { 
-  User, 
-  UserDocument, 
-} from '../users/schemas/user.schema';
 import {
   Appointment,
   AppointmentDocument,
@@ -28,8 +25,6 @@ export class AppointmentsService {
     private appointmentModel: Model<AppointmentDocument>,
     @InjectModel(TrialsRecord.name)
     private trialsRecord: Model<TrialsRecord>,
-    @InjectModel(User.name)
-    private userModel: Model<UserDocument>,
   ) {}
 
   async approve(id: Types.ObjectId): Promise<ResponseDto<AppointmentResDto>> {
@@ -44,6 +39,12 @@ export class AppointmentsService {
 
     appointment.appointment_status = AppointmentStatus.CONFIRMED;
     await appointment.save();
+
+    await this.attachToActiveTrialRecord(
+      appointment.user_id,
+      appointment.trial_id,
+      appointment._id,
+    );
 
     return new ResponseDto<AppointmentResDto>({
       data: plainToInstance(AppointmentResDto, appointment, {
@@ -76,6 +77,19 @@ export class AppointmentsService {
     user_id: Types.ObjectId,
     body: CreateAppointmentDto,
   ): Promise<ResponseDto<AppointmentResDto>> {
+    const trialId = new Types.ObjectId(body.trial_id);
+    // Appointments may be arranged while the participant is still awaiting
+    // enrolment approval. Require an owned enrolment, but do not require it to
+    // be active yet.
+    const trialRecord = await this.findTrialRecord(user_id, trialId);
+    if (!trialRecord) {
+      return new ResponseDto<AppointmentResDto>({
+        data: null,
+        success: false,
+        message: 'Trial enrolment not found',
+      });
+    }
+
     const appointment = await this.appointmentModel.create({
       ...body,
       user_id,
@@ -84,35 +98,51 @@ export class AppointmentsService {
       sign_up_date: new Date(),
     });
 
-    console.log('body.trial_id', body.trial_id);
-    console.log('user_id', user_id);
-
-    const updated = await this.trialsRecord.updateOne(
-      {
-        trial_id: new Types.ObjectId(body.trial_id),
-        user_id: user_id.toString(),
-      },
-      { $push: { appointments: appointment._id } },
+    await this.trialsRecord.updateOne(
+      { _id: trialRecord._id },
+      { $addToSet: { appointments: appointment._id } },
     );
-
-    await this.userModel.updateOne(
-      {
-        _id: user_id,
-        'trial_records.trial_id': new Types.ObjectId(body.trial_id),
-      },
-      {
-        $push: { 'trial_records.$.appointments': appointment._id },
-      },
-    );
-
-    console.log('updated', updated);
 
     return new ResponseDto<AppointmentResDto>({
-      data: plainToInstance(AppointmentResDto, appointment, {
+      data: plainToInstance(AppointmentResDto, appointment.toObject(), {
         excludeExtraneousValues: true,
       }),
       message: 'Appointment created successfully',
     });
+  }
+
+  private async findTrialRecord(userId: Types.ObjectId, trialId: Types.ObjectId) {
+    return this.trialsRecord.findOne({
+      user_id: userId,
+      trial_id: trialId,
+    });
+  }
+
+  private async findActiveTrialRecord(
+    userId: Types.ObjectId,
+    trialId: Types.ObjectId,
+  ) {
+    return this.trialsRecord.findOne({
+      user_id: userId,
+      trial_id: trialId,
+      is_approved: true,
+      is_active: true,
+      trial_status: TrialStatus.IN_PROGRESS,
+    });
+  }
+
+  private async attachToActiveTrialRecord(
+    userId: Types.ObjectId,
+    trialId: Types.ObjectId,
+    appointmentId: Types.ObjectId,
+  ) {
+    const trialRecord = await this.findActiveTrialRecord(userId, trialId);
+    if (!trialRecord) return;
+
+    await this.trialsRecord.updateOne(
+      { _id: trialRecord._id },
+      { $addToSet: { appointments: appointmentId } },
+    );
   }
 
   async getAppointment(
@@ -150,8 +180,9 @@ export class AppointmentsService {
 
   async findAll(
     query: PageOptionsDto,
+    userId: Types.ObjectId,
   ): Promise<OffsetPaginatedDto<AppointmentResDto>> {
-    const filter: FilterQuery<AppointmentDocument> = {};
+    const filter: FilterQuery<AppointmentDocument> = { user_id: userId };
 
     const [appointments, metaDto] =
       await paginateWithModel<AppointmentDocument>(

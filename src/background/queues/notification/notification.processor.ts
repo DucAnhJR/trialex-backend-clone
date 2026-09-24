@@ -1,8 +1,19 @@
 import { SendPushNotificationDto } from '@/api/notification/dto/send-push-notification.dto';
+import {
+  QuestionnaireInstance,
+  QuestionnaireInstanceDocument,
+} from '@/api/participant-experience/schemas/questionnaire-instance.schema';
+import {
+  TrialsRecord,
+  TrialsRecordDocument,
+} from '@/api/trials/schemas/trials-record.schema';
 import { QueueName } from '@/constants/job.constant';
+import { TrialStatus } from '@/database/enums/trials.enum';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
 import { Job } from 'bullmq';
+import { Model } from 'mongoose';
 import { NotificationQueueService } from './notification-queue.service';
 
 @Processor(QueueName.NOTIFICATION, {
@@ -22,6 +33,10 @@ export class NotificationProcessor extends WorkerHost {
   private readonly logger = new Logger(NotificationProcessor.name);
   constructor(
     private readonly notificationQueueService: NotificationQueueService,
+    @InjectModel(QuestionnaireInstance.name)
+    private readonly questionnaireModel: Model<QuestionnaireInstanceDocument>,
+    @InjectModel(TrialsRecord.name)
+    private readonly trialsRecordModel: Model<TrialsRecordDocument>,
   ) {
     super();
   }
@@ -30,6 +45,34 @@ export class NotificationProcessor extends WorkerHost {
       `Processing job ${job.id} of type ${job.name} with data ${JSON.stringify(job.data)}...`,
     );
 
+    const questionnaireInstanceId = job.data.data?.questionnaireInstanceId;
+    if (questionnaireInstanceId) {
+      const instance = await this.questionnaireModel
+        .findById(questionnaireInstanceId)
+        .select('status trial_record_id')
+        .lean();
+      if (
+        !instance ||
+        !['upcoming', 'due', 'overdue'].includes(instance.status)
+      ) {
+        this.logger.debug(
+          `Skipping reminder job ${job.id}; questionnaire is no longer active.`,
+        );
+        return { skipped: true };
+      }
+      const activeEnrolment = await this.trialsRecordModel.exists({
+        _id: instance.trial_record_id,
+        trial_status: TrialStatus.IN_PROGRESS,
+        onboarding_status: 'approved',
+        is_active: true,
+      });
+      if (!activeEnrolment) {
+        this.logger.debug(
+          `Skipping reminder job ${job.id}; enrolment is no longer active.`,
+        );
+        return { skipped: true };
+      }
+    }
     return await this.notificationQueueService.sendPushNotification(job.data);
   }
 
