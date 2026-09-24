@@ -6,8 +6,11 @@ import {
   EnumField,
   NumberField,
   StringField,
+  StringFieldOptional,
 } from '@/decorators/field.decorators';
+import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Transform } from 'class-transformer';
+import { IsString } from 'class-validator';
 import { TrialsResDto } from './trials.res.dto';
 
 export class TrialsRecordResDto {
@@ -50,11 +53,23 @@ export class TrialsRecordResDto {
   @Expose()
   is_active: boolean;
 
+  @BooleanField({
+    description: 'Whether this approved enrolment has a questionnaire schedule',
+  })
+  @Expose()
+  has_questionnaire_schedule: boolean;
+
   @EnumField(() => TrialStatus, {
     description: 'Trial Status',
   })
   @Expose()
   trial_status: TrialStatus;
+
+  @StringFieldOptional({
+    description: 'Participant onboarding state',
+  })
+  @Expose()
+  onboarding_status?: string;
 
   @DateField({
     description: 'Sign Up Date',
@@ -68,14 +83,28 @@ export class TrialsRecordResDto {
   @Expose()
   approval_date: Date;
 
-  @StringField({
+  @ApiProperty({
     description: 'List of Appointment IDs',
+    type: String,
     isArray: true,
   })
+  @IsString({ each: true })
   @Expose()
   @Transform(({ value }) =>
     Array.isArray(value)
-      ? value.map((v) => v?._id?.toString() ?? v?.toString())
+      ? value
+          .map((appointment) => {
+            if (
+              appointment &&
+              typeof appointment === 'object' &&
+              '_id' in appointment
+            ) {
+              return String((appointment as { _id: unknown })._id);
+            }
+
+            return appointment == null ? null : String(appointment);
+          })
+          .filter((appointmentId): appointmentId is string => !!appointmentId)
       : [],
   )
   appointments: string[];

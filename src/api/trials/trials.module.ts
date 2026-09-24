@@ -10,6 +10,10 @@ import { User, UserSchema } from '@/api/users/schemas/user.schema';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import {
+  QuestionnaireInstance,
+  QuestionnaireInstanceSchema,
+} from '../participant-experience/schemas/questionnaire-instance.schema';
+import {
   TrialsRecord,
   TrialsRecordSchema,
 } from './schemas/trials-record.schema';
@@ -39,6 +43,10 @@ import { TrialsService } from './trials.service';
       {
         name: TrialPreference.name,
         schema: TrialPreferenceSchema,
+      },
+      {
+        name: QuestionnaireInstance.name,
+        schema: QuestionnaireInstanceSchema,
       },
     ]),
   ],

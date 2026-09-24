@@ -186,14 +186,15 @@ export class NotificationsService {
     });
   }
 
-  createNotification(
+  async createNotification(
     dto: CreateNotificationDto,
   ): Promise<NotificationDocument> {
-    return this.notificationModel.create({
+    const notification = new this.notificationModel({
       ...dto,
       userId: new Types.ObjectId(dto.userId),
       senderId: dto.senderId ? new Types.ObjectId(dto.senderId) : null,
     });
+    return notification.save();
   }
 
   async sendTestNotification(id: Types.ObjectId) {

@@ -10,8 +10,11 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { plainToInstance } from 'class-transformer';
 import * as crypto from 'crypto';
-import { merge } from 'lodash';
 import { FilterQuery, Model, Types } from 'mongoose';
+import {
+  QuestionnaireInstance,
+  QuestionnaireInstanceDocument,
+} from '../participant-experience/schemas/questionnaire-instance.schema';
 import {
   TrialPreference,
   TrialPreferenceDocument,
@@ -44,6 +47,8 @@ export class TrialsService {
     private userModel: Model<UserDocument>,
     @InjectModel(TrialPreference.name)
     private trialPreferenceModel: Model<TrialPreferenceDocument>,
+    @InjectModel(QuestionnaireInstance.name)
+    private questionnaireInstanceModel: Model<QuestionnaireInstanceDocument>,
   ) {}
 
   async getUserRecommendedTrials(
@@ -114,9 +119,10 @@ export class TrialsService {
 
   async findTrialRecordById(
     id: Types.ObjectId,
+    userId: Types.ObjectId,
   ): Promise<ResponseDto<TrialsRecordResDto>> {
     const trialRecord = await this.trialsRecordModel
-      .findById(id)
+      .findOne({ _id: id, user_id: userId })
       .populate('trial_id')
       .populate('appointments');
     if (!trialRecord) {
@@ -152,9 +158,26 @@ export class TrialsService {
       throw new BadRequestException('Trial record not found');
     }
 
+    // Mark the enrolment inactive first so a queued reminder cannot be sent
+    // during withdrawal. Completed answers remain in the audit trail.
     await this.trialsRecordModel.updateOne(
       { _id: trialRecordId, user_id: userId },
-      { trial_status: TrialStatus.WITHDRAW },
+      {
+        $set: {
+          trial_status: TrialStatus.WITHDRAW,
+          onboarding_status: 'withdrawn',
+          is_active: false,
+        },
+      },
+    );
+
+    await this.questionnaireInstanceModel.updateMany(
+      {
+        trial_record_id: trialRecordId,
+        user_id: userId,
+        status: { $in: ['upcoming', 'due', 'overdue'] },
+      },
+      { $set: { status: 'cancelled' } },
     );
 
     return new ResponseNoDataDto({
@@ -167,18 +190,19 @@ export class TrialsService {
     updateDto: UpdateTrialRecord,
     _userId: Types.ObjectId,
   ): Promise<ResponseDto<TrialsRecordResDto>> {
-    const existingRecord = await this.trialsRecordModel.findById(id);
+    const existingRecord = await this.trialsRecordModel.findOne({
+      _id: id,
+      user_id: _userId,
+    });
 
     if (!existingRecord) {
       throw new BadRequestException('Trial record not found');
     }
 
-    // Merge the existing record with the update DTO
-    const updatedData = merge(existingRecord.toObject(), updateDto);
-
-    const updatedRecord = await this.trialsRecordModel.findByIdAndUpdate(
-      id,
-      updatedData,
+    // Only allow fields explicitly represented by UpdateTrialRecord. Never merge arbitrary client data.
+    const updatedRecord = await this.trialsRecordModel.findOneAndUpdate(
+      { _id: id, user_id: _userId },
+      { $set: updateDto },
       { new: true },
     );
 
@@ -424,84 +448,6 @@ export class TrialsService {
     });
   }
 
-  async approveTrial(
-    id: Types.ObjectId,
-  ): Promise<ResponseDto<TrialsRecordResDto>> {
-    const existingTrials = await this.trialsRecordModel.findById(id);
-    if (!existingTrials) {
-      return new ResponseDto<TrialsRecordResDto>({
-        data: null,
-        success: false,
-        message: 'Signup trial not found',
-      });
-    }
-
-    const trial = await this.trialsRecordModel.findByIdAndUpdate(
-      id,
-      {
-        is_approved: true,
-        approval_date: new Date(),
-        is_active: true,
-        trial_status: TrialStatus.IN_PROGRESS,
-      },
-      { new: true },
-    );
-
-    if (trial) {
-      const updatedTrialRecord = trial.toObject();
-
-      await this.userModel.updateOne(
-        { _id: trial.user_id, 'trial_records._id': trial._id },
-        { $set: { 'trial_records.$': updatedTrialRecord } },
-      );
-    }
-
-    return new ResponseDto<TrialsRecordResDto>({
-      data: plainToInstance(TrialsRecordResDto, trial, {
-        excludeExtraneousValues: true,
-      }),
-      message: 'Trial approved successfully',
-    });
-  }
-
-  async declineTrial(
-    id: Types.ObjectId,
-  ): Promise<ResponseDto<TrialsRecordResDto>> {
-    const existingTrials = await this.trialsRecordModel.findById(id);
-    if (!existingTrials) {
-      return new ResponseDto<TrialsRecordResDto>({
-        data: null,
-        success: false,
-        message: 'Signup trial not found',
-      });
-    }
-
-    const trial = await this.trialsRecordModel.findByIdAndUpdate(
-      id,
-      {
-        is_approved: false,
-        is_active: false,
-      },
-      { new: true },
-    );
-
-    if (trial) {
-      const updatedTrialRecord = trial.toObject();
-
-      await this.userModel.updateOne(
-        { _id: trial.user_id, 'trial_records._id': trial._id },
-        { $set: { 'trial_records.$': updatedTrialRecord } },
-      );
-    }
-
-    return new ResponseDto<TrialsRecordResDto>({
-      data: plainToInstance(TrialsRecordResDto, trial, {
-        excludeExtraneousValues: true,
-      }),
-      message: 'Signup trial declined successfully',
-    });
-  }
-
   async signUpTrials(
     trialId: Types.ObjectId,
     userId: Types.ObjectId,
@@ -528,21 +474,36 @@ export class TrialsService {
       });
     }
 
-    const trialRecord = await this.trialsRecordModel.create({
+    const trialRecord = new this.trialsRecordModel({
       trial_id: trialId,
       user_id: userId,
+      // The existing eligibility/share-information confirmation has completed.
+      // The shared onboarding form is the next step, not a second enrolment.
+      onboarding_status: 'draft',
       total_milestones: this.getTotalMilestones(trials),
       total_milestones_completed: 0,
     });
-
-    const trialRecordObj = trialRecord.toObject();
+    try {
+      await trialRecord.save();
+    } catch (error) {
+      if ((error as { code?: number }).code === 11000) {
+        return new ResponseDto<TrialsRecordResDto>({
+          data: null,
+          success: false,
+          message: 'User already signed up for this trial',
+        });
+      }
+      throw error;
+    }
 
     await this.userModel.findByIdAndUpdate(userId, {
-      $push: { trial_records: trialRecordObj },
+      // User.trial_records is an ObjectId array. Pushing the full Mongoose
+      // document can recurse through its populated references during casting.
+      $addToSet: { trial_records: trialRecord._id },
     });
 
     return new ResponseDto<TrialsRecordResDto>({
-      data: plainToInstance(TrialsRecordResDto, trialRecord, {
+      data: plainToInstance(TrialsRecordResDto, trialRecord.toObject(), {
         excludeExtraneousValues: true,
       }),
       message: 'Signed up for trial successfully',
@@ -721,17 +682,6 @@ export class TrialsService {
           },
         },
         { new: true },
-      );
-    }
-
-    if (updatedRecord) {
-      await this.userModel.updateOne(
-        { _id: trialRecord.user_id, 'trial_records._id': trialRecord._id },
-        {
-          $set: {
-            'trial_records.$': updatedRecord.toObject(),
-          },
-        },
       );
     }
 

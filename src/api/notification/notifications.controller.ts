@@ -87,7 +87,12 @@ export class NotificationsController {
     description: 'ID của user hiện tại',
     type: 'string',
   })
-  async sendTestNotification(@Param('id') id: Types.ObjectId) {
-    return this.notificationService.sendTestNotification(id);
+  async sendTestNotification(@Param('id', ParseObjectIdPipe) id: string) {
+    const notification = await this.notificationService.sendTestNotification(
+      id as unknown as Types.ObjectId,
+    );
+    // Return a plain object to Swagger rather than a hydrated Mongoose
+    // document, which is not safe for the HTTP response serializer.
+    return notification.toObject();
   }
 }

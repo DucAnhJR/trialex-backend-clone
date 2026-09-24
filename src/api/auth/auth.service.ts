@@ -297,7 +297,11 @@ export class AuthService {
   async login(dto: LoginDto): Promise<ResponseDto<SignInResDto>> {
     const { email, password } = dto;
 
-    const user = await this.userModel.findOne({ email });
+    const user = await this.userModel.findOne({ email }).populate({
+      path: 'trial_records',
+      select:
+        '_id trial_id is_approved is_active has_questionnaire_schedule trial_status onboarding_status sign_up_date approval_date',
+    });
 
     if (!user) {
       return new ResponseDto<SignInResDto>({
@@ -350,7 +354,17 @@ export class AuthService {
   }
 
   async getMe(userId: Types.ObjectId): Promise<ResponseDto<BaseUserResDto>> {
-    const user = await this.userModel.findOne({ _id: userId }).lean();
+    // The app must be able to restore a pending enrolment after a reload. Only
+    // populate the safe state needed by the participant UI; onboarding answers
+    // and other sensitive record data remain excluded.
+    const user = await this.userModel
+      .findOne({ _id: userId })
+      .populate({
+        path: 'trial_records',
+        select:
+          '_id trial_id is_approved is_active has_questionnaire_schedule trial_status onboarding_status sign_up_date approval_date',
+      })
+      .lean();
 
     if (!user) {
       return new ResponseDto<BaseUserResDto>({

@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module';
 import { HomeModule } from './home/home.module';
 import { NotificationsModule } from './notification/notifications.module';
 import { PublicationModule } from './publication/publication.module';
+import { ParticipantExperienceModule } from './participant-experience/participant-experience.module';
 import { SearchModule } from './search/search.module';
 import { SupportsModule } from './supports/supports.module';
 import { TrialsModule } from './trials/trials.module';
@@ -25,6 +26,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     AppointmentsModule,
     TrialsModule,
     PublicationModule,
+    ParticipantExperienceModule,
     SearchModule,
     SupportsModule,
     AuthModule,
