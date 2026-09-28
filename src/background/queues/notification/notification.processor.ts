@@ -105,7 +105,7 @@ export class NotificationProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('error')
-  async onError(job: Job, error: Error) {
-    this.logger.error(`Job ${job.id} has failed with error: ${error.message}`);
+  async onError(error: Error) {
+    this.logger.error(`Notification queue error: ${error.message}`);
   }
 }

@@ -37,22 +37,15 @@ lerna-debug.log*
 *.sublime-workspace
 
 # IDE - VSCode
-.vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 
 # dotenv environment variable files
-.env
-.env.local
-.env.test
 .env.test.local
-.env.development
 .env.development.local
-.env.staging
 .env.staging.local
-.env.production
 .env.production.local
 
 # temp directory
@@ -80,3 +73,4 @@ docs/.vuepress/dist
 /schemas
 
 /backup
+config.bat
