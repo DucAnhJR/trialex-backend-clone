@@ -65,6 +65,9 @@ export class NotificationProcessor extends WorkerHost {
         trial_status: TrialStatus.IN_PROGRESS,
         onboarding_status: 'approved',
         is_active: true,
+        is_approved: true,
+        informed_consent_obtained: true,
+        eligibility_confirmed: true,
       });
       if (!activeEnrolment) {
         this.logger.debug(

@@ -20,12 +20,17 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
 import { Model, Types } from 'mongoose';
 import {
+  canAccessStudy,
+  STUDY_CONFIRMATION_FILTER,
+} from '../trials/trial-access';
+import {
   GLOBAL_ONBOARDING_FIELDS,
   OnboardingField,
   QuestionnaireField,
   QuestionnaireRule,
 } from './default-participant-configuration';
 import {
+  ApproveTrialEnrolmentDto,
   CompleteQuestionnaireDto,
   DeclineTrialOnboardingDto,
   SubmitNativeQuestionnaireDto,
@@ -88,6 +93,17 @@ export class ParticipantExperienceService {
     @InjectQueue(QueueName.NOTIFICATION)
     private readonly notificationQueue: Queue,
   ) {}
+
+  async getOnboardingConfiguration(trialId: Types.ObjectId) {
+    const configuration = await this.getPublishedConfiguration(trialId);
+    // Questionnaire schedules, URLs and forms are participant-only data.
+    return configuration
+      ? {
+          version: configuration.version,
+          onboarding: { fields: GLOBAL_ONBOARDING_FIELDS },
+        }
+      : null;
+  }
 
   async getPublishedConfiguration(trialId: Types.ObjectId) {
     return this.configModel
@@ -157,6 +173,15 @@ export class ParticipantExperienceService {
     userId: Types.ObjectId,
     dto: SubmitTrialOnboardingDto,
   ) {
+    const interest = await this.trialRecordModel.findOne({
+      trial_id: trialId,
+      user_id: userId,
+    });
+    if (!interest?.interest_registered_at) {
+      throw new BadRequestException(
+        'Register your interest before submitting onboarding.',
+      );
+    }
     const config = await this.getPublishedConfiguration(trialId);
     if (
       config &&
@@ -178,13 +203,16 @@ export class ParticipantExperienceService {
     );
 
     try {
-      // The conditional upsert and database unique index make retries and
-      // concurrent requests converge on one enrolment. Once pending/approved,
+      // Update only the existing interest record. Conditional state checks make
+      // concurrent submissions converge. Once pending/approved,
       // the existing record is returned below without rewriting answers.
       const record = await this.trialRecordModel.findOneAndUpdate(
         {
           trial_id: trialId,
           user_id: userId,
+          trial_status: TrialStatus.PENDING,
+          is_approved: false,
+          interest_registered_at: { $ne: null },
           $or: [
             { onboarding_status: 'draft' },
             { onboarding_status: null },
@@ -207,8 +235,26 @@ export class ParticipantExperienceService {
             has_questionnaire_schedule: false,
           },
         },
-        { new: true, upsert: true, setDefaultsOnInsert: true },
+        { new: true },
       );
+      if (!record) {
+        const existing = await this.trialRecordModel
+          .findOne({ trial_id: trialId, user_id: userId })
+          .select('+onboarding_idempotency_key');
+        if (
+          existing &&
+          ['pending_approval', 'approved'].includes(
+            existing.onboarding_status || '',
+          ) &&
+          (!dto.idempotency_key ||
+            existing.onboarding_idempotency_key === dto.idempotency_key)
+        ) {
+          return existing.toObject();
+        }
+        throw new BadRequestException(
+          'This trial onboarding cannot be submitted.',
+        );
+      }
       await this.userModel.updateOne(
         { _id: userId },
         { $addToSet: { trial_records: record._id } },
@@ -241,11 +287,56 @@ export class ParticipantExperienceService {
     }
   }
 
-  async approve(trialRecordId: Types.ObjectId, actorId: Types.ObjectId) {
+  async approve(
+    trialRecordId: Types.ObjectId,
+    actorId: Types.ObjectId,
+    dto: ApproveTrialEnrolmentDto,
+  ) {
     await this.assertAdmin(actorId);
     const record = await this.trialRecordModel.findById(trialRecordId);
     if (!record) throw new NotFoundException('Trial enrolment not found');
-    if (record.onboarding_status === 'approved') return record.toObject();
+    if (
+      !dto ||
+      dto.informed_consent_obtained !== true ||
+      dto.eligibility_confirmed !== true ||
+      !dto.study_team_confirmation_reference?.trim() ||
+      !dto.study_team_confirmed_at ||
+      Number.isNaN(Date.parse(dto.study_team_confirmed_at)) ||
+      new Date(dto.study_team_confirmed_at).getTime() > Date.now()
+    ) {
+      throw new BadRequestException(
+        'Record both study-team confirmations, their date and a reference before approval.',
+      );
+    }
+    if (canAccessStudy(record)) {
+      if (
+        record.trial_status === TrialStatus.IN_PROGRESS &&
+        record.has_questionnaire_schedule &&
+        record.configuration_id
+      ) {
+        const existingConfig = await this.configModel.findById(
+          record.configuration_id,
+        );
+        if (existingConfig) await this.createSchedule(record, existingConfig);
+      }
+      return record.toObject();
+    }
+    // Existing active records require explicit staff verification; never infer consent.
+    if (
+      record.is_approved &&
+      record.is_active &&
+      CALENDAR_VISIBLE_TRIAL_STATUSES.includes(record.trial_status)
+    ) {
+      return this.recordStudyTeamConfirmation(record, actorId, dto);
+    }
+    if (
+      !record.interest_registered_at ||
+      record.contact_sharing_status !== 'shared'
+    ) {
+      throw new BadRequestException(
+        'Contact details must be shared with the study team before approval.',
+      );
+    }
     if (record.onboarding_status !== 'pending_approval')
       throw new BadRequestException('This enrolment cannot be approved');
     // Do not approve a legacy pending record that was submitted against the
@@ -288,15 +379,52 @@ export class ParticipantExperienceService {
     // correctly refuses reminders for pending enrolments; if the schedule is
     // queued first, an offset-0 reminder can be processed and skipped before
     // this approval is visible in MongoDB.
+    const previousStatus = record.onboarding_status;
     record.onboarding_status = 'approved';
     record.is_approved = true;
     record.is_active = true;
     record.trial_status = 'inprogress' as never;
     record.approval_date = new Date();
     record.approved_by = actorId;
-    await record.save();
+    record.informed_consent_obtained = true;
+    record.eligibility_confirmed = true;
+    record.study_team_confirmed_at = new Date(dto.study_team_confirmed_at);
+    record.study_team_confirmation_reference =
+      dto.study_team_confirmation_reference.trim();
+    const approved = await this.trialRecordModel.findOneAndUpdate(
+      {
+        _id: record._id,
+        onboarding_status: previousStatus,
+        trial_status: TrialStatus.PENDING,
+        is_approved: false,
+      },
+      {
+        $set: {
+          onboarding_status: record.onboarding_status,
+          is_approved: true,
+          is_active: true,
+          trial_status: record.trial_status,
+          approval_date: record.approval_date,
+          approved_by: actorId,
+          informed_consent_obtained: true,
+          eligibility_confirmed: true,
+          study_team_confirmed_at: record.study_team_confirmed_at,
+          study_team_confirmed_by: actorId,
+          study_team_confirmation_reference:
+            record.study_team_confirmation_reference,
+          has_questionnaire_schedule: record.has_questionnaire_schedule,
+          configuration_id: record.configuration_id,
+          configuration_version: record.configuration_version,
+        },
+      },
+      { new: true },
+    );
+    if (!approved)
+      throw new BadRequestException(
+        'The enrolment changed. Refresh before approving.',
+      );
     if (hasSchedule && config) {
-      await this.createSchedule(record, config);
+      await this.createSchedule(approved, config);
     }
     await this.notifications.sendPushNotification({
       userId: record.user_id,
@@ -309,7 +437,38 @@ export class ParticipantExperienceService {
         ? { trialRecordId: record._id.toString(), uri: 'calendar' }
         : undefined,
     });
-    return record.toObject();
+    return approved.toObject();
+  }
+
+  private async recordStudyTeamConfirmation(
+    record: TrialsRecordDocument,
+    actorId: Types.ObjectId,
+    dto: ApproveTrialEnrolmentDto,
+  ) {
+    const updated = await this.trialRecordModel.findOneAndUpdate(
+      {
+        _id: record._id,
+        is_active: true,
+        is_approved: true,
+        trial_status: record.trial_status,
+      },
+      {
+        $set: {
+          informed_consent_obtained: true,
+          eligibility_confirmed: true,
+          study_team_confirmed_at: new Date(dto.study_team_confirmed_at),
+          study_team_confirmation_reference:
+            dto.study_team_confirmation_reference.trim(),
+          study_team_confirmed_by: actorId,
+        },
+      },
+      { new: true },
+    );
+    if (!updated)
+      throw new BadRequestException(
+        'The enrolment changed. Refresh before confirming.',
+      );
+    return updated.toObject();
   }
 
   async decline(
@@ -321,10 +480,15 @@ export class ParticipantExperienceService {
     const record = await this.trialRecordModel.findById(trialRecordId);
     if (!record) throw new NotFoundException('Trial enrolment not found');
     if (record.onboarding_status === 'declined') return record.toObject();
-    if (record.onboarding_status !== 'pending_approval') {
+    if (
+      !['draft', 'pending_approval'].includes(record.onboarding_status || '')
+    ) {
       throw new BadRequestException('This enrolment cannot be declined');
     }
 
+    const previousStatus = record.onboarding_status;
+    record.contact_sharing_status =
+      record.contact_sharing_status === 'shared' ? 'shared' : 'cancelled';
     record.onboarding_status = 'declined';
     record.is_approved = false;
     record.is_active = false;
@@ -333,7 +497,32 @@ export class ParticipantExperienceService {
     record.declined_by = actorId;
     record.declined_at = new Date();
     record.decision_note = dto?.decision_note?.trim() || null;
-    await record.save();
+    const declined = await this.trialRecordModel.findOneAndUpdate(
+      {
+        _id: record._id,
+        onboarding_status: previousStatus,
+        trial_status: TrialStatus.PENDING,
+        is_approved: false,
+      },
+      {
+        $set: {
+          contact_sharing_status: record.contact_sharing_status,
+          onboarding_status: 'declined',
+          is_approved: false,
+          is_active: false,
+          has_questionnaire_schedule: false,
+          trial_status: TrialStatus.DECLINED,
+          declined_by: actorId,
+          declined_at: record.declined_at,
+          decision_note: record.decision_note,
+        },
+      },
+      { new: true },
+    );
+    if (!declined)
+      throw new BadRequestException(
+        'The enrolment changed. Refresh before declining.',
+      );
 
     // Normally pending enrolments have no instances, but cancelling defensively
     // prevents reminders if an earlier partial operation ever created one.
@@ -387,9 +576,8 @@ export class ParticipantExperienceService {
     const records = await this.trialRecordModel
       .find({
         user_id: userId,
-        onboarding_status: 'approved',
+        ...STUDY_CONFIRMATION_FILTER,
         trial_status: { $in: CALENDAR_VISIBLE_TRIAL_STATUSES },
-        is_active: true,
       })
       .select('_id')
       .lean();
@@ -910,9 +1098,8 @@ export class ParticipantExperienceService {
       .findOne({
         _id: trialRecordId,
         user_id: userId,
-        onboarding_status: 'approved',
+        ...STUDY_CONFIRMATION_FILTER,
         trial_status: { $in: CALENDAR_VISIBLE_TRIAL_STATUSES },
-        is_active: true,
       })
       .select('configuration_id');
     if (!record)
