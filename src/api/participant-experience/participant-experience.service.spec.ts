@@ -2,6 +2,13 @@ import { TrialStatus } from '@/database/enums/trials.enum';
 import { UserRole } from '@/database/enums/user.enum';
 import { Types } from 'mongoose';
 import { GLOBAL_ONBOARDING_FIELDS } from './default-participant-configuration';
+const studyConfirmation = {
+  informed_consent_obtained: true,
+  eligibility_confirmed: true,
+  study_team_confirmed_at: '2025-01-01T00:00:00.000Z',
+  study_team_confirmation_reference: 'Study team confirmation #123',
+};
+
 import { ParticipantExperienceService } from './participant-experience.service';
 
 describe('ParticipantExperienceService completion prompt response', () => {
@@ -104,6 +111,9 @@ describe('ParticipantExperienceService enrolment workflow', () => {
     };
     const trialRecordModel = {
       findOneAndUpdate: jest.fn().mockResolvedValue(record),
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ interest_registered_at: new Date() }),
     };
     const service = new ParticipantExperienceService(
       userModel as never,
@@ -132,7 +142,7 @@ describe('ParticipantExperienceService enrolment workflow', () => {
           onboarding_status: 'pending_approval',
         }),
       }),
-      expect.objectContaining({ upsert: true, new: true }),
+      expect.objectContaining({ new: true }),
     );
     expect(userModel.updateOne).toHaveBeenCalledWith(
       { _id: userId },
@@ -145,15 +155,18 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       code: 11000,
     });
     const existing = {
+      interest_registered_at: new Date(),
+      contact_sharing_status: 'shared',
       onboarding_status: 'pending_approval',
       onboarding_idempotency_key: 'request-1',
       toObject: jest.fn().mockReturnValue({ _id: recordId }),
     };
     const trialRecordModel = {
       findOneAndUpdate: jest.fn().mockRejectedValue(duplicateKeyError),
-      findOne: jest.fn().mockReturnValue({
+      findOne: jest.fn().mockImplementation(() => ({
+        interest_registered_at: new Date(),
         select: jest.fn().mockResolvedValue(existing),
-      }),
+      })),
     };
     const service = new ParticipantExperienceService(
       {} as never,
@@ -242,6 +255,8 @@ describe('ParticipantExperienceService enrolment workflow', () => {
         { field_id: 'surgery_location', value: 'Birmingham Hospital' },
         { field_id: 'participant_id', value: 'ACL-ODS-1234' },
       ],
+      interest_registered_at: new Date(),
+      contact_sharing_status: 'shared',
       onboarding_status: 'pending_approval',
       has_questionnaire_schedule: false,
       trial_status: TrialStatus.PENDING,
@@ -253,7 +268,10 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       toObject: jest.fn().mockReturnValue({ _id: recordId }),
     };
     const userModel = { findById: jest.fn().mockImplementation(adminLookup) };
-    const trialRecordModel = { findById: jest.fn().mockResolvedValue(record) };
+    const trialRecordModel = {
+      findById: jest.fn().mockResolvedValue(record),
+      findOneAndUpdate: jest.fn().mockResolvedValue(record),
+    };
     const configModel = {
       findOne: jest
         .fn()
@@ -270,12 +288,12 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       {} as never,
     );
 
-    await service.approve(recordId, userId);
+    await service.approve(recordId, userId, studyConfirmation);
 
     expect(record.onboarding_status).toBe('approved');
     expect(record.has_questionnaire_schedule).toBe(false);
     expect(record.trial_status).toBe(TrialStatus.IN_PROGRESS);
-    expect(record.save).toHaveBeenCalledTimes(1);
+    expect(trialRecordModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
     expect(notifications.sendPushNotification).toHaveBeenCalledWith(
       expect.objectContaining({ data: undefined }),
     );
@@ -305,6 +323,8 @@ describe('ParticipantExperienceService enrolment workflow', () => {
           submitted_at: new Date(),
         },
       ],
+      interest_registered_at: new Date(),
+      contact_sharing_status: 'shared',
       onboarding_status: 'pending_approval',
       has_questionnaire_schedule: false,
       trial_status: TrialStatus.PENDING,
@@ -355,7 +375,10 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       findOne: jest.fn().mockResolvedValue(null),
     });
     const userModel = { findById: jest.fn().mockImplementation(adminLookup) };
-    const trialRecordModel = { findById: jest.fn().mockResolvedValue(record) };
+    const trialRecordModel = {
+      findById: jest.fn().mockResolvedValue(record),
+      findOneAndUpdate: jest.fn().mockResolvedValue(record),
+    };
     const configModel = {
       findById: jest.fn().mockResolvedValue(configuration),
     };
@@ -381,7 +404,7 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       notificationQueue as never,
     );
 
-    await service.approve(recordId, userId);
+    await service.approve(recordId, userId, studyConfirmation);
 
     expect(createdInstances).toHaveLength(1);
     expect(createdInstances[0]).toEqual(
@@ -394,7 +417,7 @@ describe('ParticipantExperienceService enrolment workflow', () => {
     expect(record.configuration_version).toBe(2);
     expect(record.has_questionnaire_schedule).toBe(true);
     expect(record.anchor_timezone).toBe('Australia/Melbourne');
-    expect(record.save).toHaveBeenCalledTimes(2);
+    expect(record.save).toHaveBeenCalledTimes(1);
     expect(notificationQueue.add).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
@@ -412,6 +435,8 @@ describe('ParticipantExperienceService enrolment workflow', () => {
     const record = {
       _id: recordId,
       user_id: userId,
+      interest_registered_at: new Date(),
+      contact_sharing_status: 'shared',
       onboarding_status: 'pending_approval',
       trial_status: TrialStatus.PENDING,
       is_approved: false,
@@ -424,7 +449,10 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       toObject: jest.fn().mockReturnValue({ _id: recordId }),
     };
     const userModel = { findById: jest.fn().mockImplementation(adminLookup) };
-    const trialRecordModel = { findById: jest.fn().mockResolvedValue(record) };
+    const trialRecordModel = {
+      findById: jest.fn().mockResolvedValue(record),
+      findOneAndUpdate: jest.fn().mockResolvedValue(record),
+    };
     const instanceModel = { updateMany: jest.fn() };
     const notifications = { sendPushNotification: jest.fn() };
     const service = new ParticipantExperienceService(
@@ -461,6 +489,8 @@ describe('ParticipantExperienceService enrolment workflow', () => {
         { field_id: 'surgery_location', value: 'Birmingham Hospital' },
         { field_id: 'participant_id', value: 'ACL-ODS-1234' },
       ],
+      interest_registered_at: new Date(),
+      contact_sharing_status: 'shared',
       onboarding_status: 'pending_approval',
       has_questionnaire_schedule: false,
       is_approved: false,
@@ -475,15 +505,18 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       status: 'retired',
       schedule: {
         timezone: 'Australia/Melbourne',
-        questionnaires: [
-          { key: 'baseline', rule: 'days_after', offset: 0 },
-        ],
+        questionnaires: [{ key: 'baseline', rule: 'days_after', offset: 0 }],
       },
       completion_prompt: { enabled: false },
     };
     const userModel = { findById: jest.fn().mockImplementation(adminLookup) };
-    const trialRecordModel = { findById: jest.fn().mockResolvedValue(record) };
-    const configModel = { findById: jest.fn().mockResolvedValue(configuration) };
+    const trialRecordModel = {
+      findById: jest.fn().mockResolvedValue(record),
+      findOneAndUpdate: jest.fn().mockResolvedValue(record),
+    };
+    const configModel = {
+      findById: jest.fn().mockResolvedValue(configuration),
+    };
     const service = new ParticipantExperienceService(
       userModel as never,
       {} as never,
@@ -500,7 +533,7 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       .spyOn(serviceWithPrivateSchedule, 'createSchedule')
       .mockResolvedValue(undefined);
 
-    await service.approve(recordId, userId);
+    await service.approve(recordId, userId, studyConfirmation);
 
     expect(record.has_questionnaire_schedule).toBe(true);
     expect(createSchedule).toHaveBeenCalledWith(record, configuration);
@@ -509,6 +542,8 @@ describe('ParticipantExperienceService enrolment workflow', () => {
   it('does not approve a pending record submitted with the retired onboarding fields', async () => {
     const record = {
       _id: recordId,
+      interest_registered_at: new Date(),
+      contact_sharing_status: 'shared',
       onboarding_status: 'pending_approval',
       onboarding_answers: [
         { field_id: 'surgery_date', value: '2026-01-31' },
@@ -526,9 +561,9 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       {} as never,
     );
 
-    await expect(service.approve(recordId, userId)).rejects.toThrow(
-      'surgery_location is required',
-    );
+    await expect(
+      service.approve(recordId, userId, studyConfirmation),
+    ).rejects.toThrow('surgery_location is required');
     expect(record.save).not.toHaveBeenCalled();
   });
 
@@ -591,7 +626,9 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       expect.objectContaining({
         _id: recordId,
         user_id: userId,
-        onboarding_status: 'approved',
+        is_approved: true,
+        informed_consent_obtained: true,
+        eligibility_confirmed: true,
         is_active: true,
       }),
     );
@@ -638,7 +675,9 @@ describe('ParticipantExperienceService enrolment workflow', () => {
 
     expect(trialRecordModel.find).toHaveBeenCalledWith({
       user_id: userId,
-      onboarding_status: 'approved',
+      is_approved: true,
+      informed_consent_obtained: true,
+      eligibility_confirmed: true,
       trial_status: {
         $in: [
           TrialStatus.IN_PROGRESS,
@@ -718,9 +757,9 @@ describe('ParticipantExperienceService enrolment workflow', () => {
       {} as never,
     );
 
-    await expect(service.getQuestionnaire(upcoming._id, userId)).rejects.toThrow(
-      'not available yet',
-    );
+    await expect(
+      service.getQuestionnaire(upcoming._id, userId),
+    ).rejects.toThrow('not available yet');
     await expect(
       service.complete(upcoming._id, userId, { reported_completed: true }),
     ).rejects.toThrow('not available yet');
@@ -766,7 +805,9 @@ describe('ParticipantExperienceService enrolment workflow', () => {
         reported_completed: true,
         mode: ' REDCap ',
       }),
-    ).resolves.toEqual(expect.objectContaining({ completion_prompt_due: false }));
+    ).resolves.toEqual(
+      expect.objectContaining({ completion_prompt_due: false }),
+    );
     expect(instance.completion).toEqual(
       expect.objectContaining({ mode: 'REDCap' }),
     );

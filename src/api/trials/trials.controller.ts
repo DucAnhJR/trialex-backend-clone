@@ -21,6 +21,7 @@ import {
 } from './dto/notice-board-action.dto';
 import { QueryTrialsRecord } from './dto/query-active-trials-record.dto';
 import { UpdateReferralCodeDto } from './dto/referral-code.dto';
+import { RegisterInterestDto } from './dto/register-interest.dto';
 import { TrialsRecordResDto } from './dto/trials-record.res.dto';
 import { TrialsResDto } from './dto/trials.res.dto';
 import { UpdateTrialRecord } from './dto/update-trial-record.dto';
@@ -31,6 +32,15 @@ import { TrialsService } from './trials.service';
 @Controller('trials')
 export class TrialsController {
   constructor(private readonly trialsService: TrialsService) {}
+
+  @Get('interest-requests')
+  @ApiAuth({ summary: 'Review trial interest requests (administrators only)' })
+  interestRequests(
+    @CurrentUser('id') actorId: Types.ObjectId,
+    @Query() query: PageOptionsDto,
+  ) {
+    return this.trialsService.interestRequests(actorId, query);
+  }
 
   @Get('active')
   @ApiAuth({
@@ -157,8 +167,11 @@ export class TrialsController {
     summary: 'Mark Milestone Completed',
     type: TrialsRecordResDto,
   })
-  async markMilestoneCompleted(@Body() dto: MarkMilestoneCompletedDto) {
-    return this.trialsService.markMilestoneCompleted(dto);
+  async markMilestoneCompleted(
+    @Body() dto: MarkMilestoneCompletedDto,
+    @CurrentUser('id') userId: Types.ObjectId,
+  ) {
+    return this.trialsService.markMilestoneCompleted(dto, userId);
   }
 
   @Get(':id')
@@ -241,17 +254,20 @@ export class TrialsController {
 
   @Post(':id/signup')
   @ApiAuth({
-    description: 'Sign up trial by ID',
-    summary: 'Sign up Trial',
+    description:
+      'Register interest and share contact details; does not enrol the participant',
+    summary: 'Register your interest',
     type: TrialsRecordResDto,
   })
   async signUpTrial(
+    @Body() dto: RegisterInterestDto,
     @Param('id', ParseObjectIdPipe) id: string,
     @CurrentUser('id') userId: Types.ObjectId,
   ) {
     return this.trialsService.signUpTrials(
       id as unknown as Types.ObjectId,
       userId,
+      dto,
     );
   }
 

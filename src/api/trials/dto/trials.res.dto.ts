@@ -18,7 +18,7 @@ import {
   ClassField,
   StringField,
 } from '@/decorators/field.decorators';
-import { Expose, Type } from 'class-transformer';
+import { Expose, Transform, Type } from 'class-transformer';
 
 export class FaqItem {
   @StringField({
@@ -68,6 +68,9 @@ export class TrialsResDto extends AuditResDto {
   @ClassField(() => StudyTeamMember, { isArray: true })
   @Type(() => StudyTeamMember)
   @Expose()
+  @Transform(({ obj, value }) => (obj.__study_access === true ? value : []), {
+    toClassOnly: true,
+  })
   study_team: StudyTeamMember[];
 
   @StringField({ isArray: true })
@@ -79,21 +82,33 @@ export class TrialsResDto extends AuditResDto {
   @ClassField(() => StudyProcedure, { isArray: true })
   @Type(() => StudyProcedure)
   @Expose()
+  @Transform(({ obj, value }) => (obj.__study_access === true ? value : []), {
+    toClassOnly: true,
+  })
   study_procedures: StudyProcedure[];
 
   @ClassField(() => About, { isArray: true })
   @Type(() => About)
   @Expose()
+  @Transform(({ obj, value }) => (obj.__study_access === true ? value : []), {
+    toClassOnly: true,
+  })
   about: About[];
 
   @ClassField(() => NoticeBoardItem, { isArray: true })
   @Type(() => NoticeBoardItem)
   @Expose()
+  @Transform(({ obj, value }) => (obj.__study_access === true ? value : []), {
+    toClassOnly: true,
+  })
   notice_board: NoticeBoardItem[];
 
   @ClassField(() => FaqItem, { isArray: true })
   @Type(() => FaqItem)
   @Expose()
+  @Transform(({ obj, value }) => (obj.__study_access === true ? value : []), {
+    toClassOnly: true,
+  })
   faqs: FaqItem[];
 
   @ClassField(() => Ethical)
@@ -108,7 +123,7 @@ export class TrialsResDto extends AuditResDto {
   @StringField({ nullable: true }) @Expose() logo: string;
   @StringField({ nullable: true }) @Expose() icon: string;
   @StringField({ nullable: true }) @Expose() video_url: string;
-  @StringField({ nullable: true }) @Expose() referal_code: string;
+  // Referral codes are resolved server-side, never exposed in the public catalogue.
   @StringField({ nullable: true }) @Expose() recruitment_status: string;
   @StringField({ nullable: true }) @Expose() trial_status: string;
   @BooleanField({ default: false }) @Expose() invite_only: boolean;

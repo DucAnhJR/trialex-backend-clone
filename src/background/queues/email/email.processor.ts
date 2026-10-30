@@ -36,6 +36,8 @@ export class EmailProcessor extends WorkerHost {
     );
 
     switch (job.name) {
+      case JobName.DISPATCH_TRIAL_INTEREST:
+        return this.emailQueueService.dispatchTrialInterests();
       case JobName.EMAIL_VERIFICATION:
         return await this.emailQueueService.sendEmailVerification(
           job.data as unknown as IVerifyEmailJob,

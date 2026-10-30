@@ -4,11 +4,17 @@ import { ResponseNoDataDto } from '@/common/dto/response/response-no-data.dto';
 import { ResponseDto } from '@/common/dto/response/response.dto';
 import { ErrorCode } from '@/constants/error-code.constant';
 import { TrialStatus } from '@/database/enums/trials.enum';
+import { UserRole } from '@/database/enums/user.enum';
 import { ValidationException } from '@/exceptions/validation.exception';
 import { paginateWithModel } from '@/utils/offset-pagination';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { plainToInstance } from 'class-transformer';
+import { isEmail } from 'class-validator';
 import * as crypto from 'crypto';
 import { FilterQuery, Model, Types } from 'mongoose';
 import {
@@ -27,6 +33,10 @@ import {
 } from './dto/notice-board-action.dto';
 import { QueryTrialsRecord } from './dto/query-active-trials-record.dto';
 import { UpdateReferralCodeDto } from './dto/referral-code.dto';
+import {
+  INTEREST_COPY_VERSION,
+  RegisterInterestDto,
+} from './dto/register-interest.dto';
 import { TrialsRecordResDto } from './dto/trials-record.res.dto';
 import { TrialsResDto } from './dto/trials.res.dto';
 import { UpdateTrialRecord } from './dto/update-trial-record.dto';
@@ -36,6 +46,11 @@ import {
   TrialsRecordDocument,
 } from './schemas/trials-record.schema';
 import { Trials, TrialsDocument } from './schemas/trials.schema';
+import {
+  canAccessStudy,
+  STUDY_CONFIRMATION_FILTER,
+  STUDY_VISIBLE_STATUSES,
+} from './trial-access';
 
 @Injectable()
 export class TrialsService {
@@ -166,6 +181,9 @@ export class TrialsService {
         $set: {
           trial_status: TrialStatus.WITHDRAW,
           onboarding_status: 'withdrawn',
+          contact_sharing_status: existingRecord.contact_shared_at
+            ? 'shared'
+            : 'cancelled',
           is_active: false,
         },
       },
@@ -187,7 +205,7 @@ export class TrialsService {
 
   async updateTrialsRecord(
     id: Types.ObjectId,
-    updateDto: UpdateTrialRecord,
+    _updateDto: UpdateTrialRecord,
     _userId: Types.ObjectId,
   ): Promise<ResponseDto<TrialsRecordResDto>> {
     const existingRecord = await this.trialsRecordModel.findOne({
@@ -199,25 +217,15 @@ export class TrialsService {
       throw new BadRequestException('Trial record not found');
     }
 
-    // Only allow fields explicitly represented by UpdateTrialRecord. Never merge arbitrary client data.
-    const updatedRecord = await this.trialsRecordModel.findOneAndUpdate(
-      { _id: id, user_id: _userId },
-      { $set: updateDto },
-      { new: true },
+    throw new ForbiddenException(
+      'Trial state is managed by the study-team approval workflow',
     );
-
-    return new ResponseDto<TrialsRecordResDto>({
-      data: plainToInstance(TrialsRecordResDto, updatedRecord, {
-        excludeExtraneousValues: true,
-      }),
-      message: 'Trial record updated successfully',
-    });
   }
 
   async redeemTrialReferralCode(
     redeem: UpdateReferralCodeDto,
     userId: Types.ObjectId,
-  ): Promise<ResponseNoDataDto> {
+  ) {
     const user = await this.userModel.findById(userId);
 
     if (!user) {
@@ -238,28 +246,11 @@ export class TrialsService {
       });
     }
 
-    const existed = await this.trialsRecordModel.findOne({
-      user_id: userId,
-      trial_id: trial._id,
-    });
-
-    if (existed) {
-      throw new BadRequestException('You have already redeemed this trial');
-    }
-
-    await this.trialsRecordModel.create({
-      user_id: userId,
-      trial_id: trial._id,
-      is_approved: true,
-      is_active: true,
-      trial_status: TrialStatus.IN_PROGRESS,
-      sign_up_date: new Date(),
-      total_milestones: this.getTotalMilestones(trial),
-      total_milestones_completed: 0,
-    });
-
-    return new ResponseNoDataDto({
-      message: 'Referral code redeemed successfully',
+    return new ResponseDto({
+      data: plainToInstance(TrialsResDto, trial.toObject(), {
+        excludeExtraneousValues: true,
+      }),
+      message: 'Trial found. Register your interest to contact the study team.',
     });
   }
 
@@ -451,63 +442,179 @@ export class TrialsService {
   async signUpTrials(
     trialId: Types.ObjectId,
     userId: Types.ObjectId,
+    dto: RegisterInterestDto,
   ): Promise<ResponseDto<TrialsRecordResDto>> {
-    const existingRecord = await this.trialsRecordModel.findOne({
+    if (
+      !dto ||
+      dto.copy_version !== INTEREST_COPY_VERSION ||
+      dto.trial_information_read !== true ||
+      dto.interest_is_not_enrolment !== true ||
+      dto.study_team_obtains_consent !== true ||
+      dto.share_contact_details !== true
+    ) {
+      throw new BadRequestException(
+        'Confirm all four statements before registering your interest.',
+      );
+    }
+    const existing = await this.trialsRecordModel.findOne({
       trial_id: trialId,
       user_id: userId,
     });
-
-    if (existingRecord) {
-      return new ResponseDto<TrialsRecordResDto>({
-        data: null,
-        success: false,
-        message: 'User already signed up for this trial',
-      });
+    if (
+      existing &&
+      [TrialStatus.WITHDRAW, TrialStatus.DECLINED].includes(
+        existing.trial_status,
+      )
+    ) {
+      throw new BadRequestException(
+        'This request has been closed. Contact the study team.',
+      );
     }
-
-    const trials = await this.trialModel.findById(trialId);
-    if (!trials) {
-      return new ResponseDto<TrialsRecordResDto>({
-        data: null,
-        success: false,
-        message: 'Trial not found',
-      });
+    if (existing?.interest_registered_at) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $addToSet: { trial_records: existing._id } },
+      );
+      return this.interestResponse(existing);
     }
-
-    const trialRecord = new this.trialsRecordModel({
-      trial_id: trialId,
-      user_id: userId,
-      // The existing eligibility/share-information confirmation has completed.
-      // The shared onboarding form is the next step, not a second enrolment.
-      onboarding_status: 'draft',
-      total_milestones: this.getTotalMilestones(trials),
-      total_milestones_completed: 0,
-    });
+    if (
+      existing &&
+      (existing.trial_status !== TrialStatus.PENDING || existing.is_approved)
+    ) {
+      throw new BadRequestException(
+        'A trial record already exists. Contact the study team.',
+      );
+    }
+    const trial = await this.trialModel.findById(trialId);
+    if (!trial) throw new BadRequestException('Trial not found');
+    if (
+      !existing &&
+      (trial.trial_status !== 'Recruitment' ||
+        trial.recruitment_status !== 'Actively recruiting')
+    ) {
+      throw new BadRequestException(
+        'This trial is not accepting expressions of interest.',
+      );
+    }
+    const recipient = trial.contact?.find((contact) =>
+      isEmail(contact.email || ''),
+    )?.email;
+    const user = await this.userModel.findById(userId);
+    const name = [user?.information?.first_name, user?.information?.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    const phoneData = user?.information?.phone_number;
+    const phone = phoneData?.phone
+      ? `${phoneData.callingCode || ''}${phoneData.phone}`
+      : '';
+    if (!name || !user?.email || !phone) {
+      throw new BadRequestException(
+        'Add your name, email address and phone number in your profile before registering your interest.',
+      );
+    }
+    const now = new Date();
+    // Compare-and-set plus the unique user/trial index handles duplicate taps and retries.
     try {
-      await trialRecord.save();
+      const record = await this.trialsRecordModel.findOneAndUpdate(
+        {
+          trial_id: trialId,
+          user_id: userId,
+          interest_registered_at: null,
+          trial_status: TrialStatus.PENDING,
+          is_approved: false,
+        },
+        {
+          $set: {
+            interest_copy_version: INTEREST_COPY_VERSION,
+            interest_registered_at: now,
+            interest_acknowledgements: {
+              trial_information_read: true,
+              interest_is_not_enrolment: true,
+              study_team_obtains_consent: true,
+              share_contact_details: true,
+            },
+            interest_contact: { name, email: user.email, phone },
+            interest_recipient: recipient || null,
+            interest_trial_name:
+              trial.overview?.full_name ||
+              trial.overview?.name ||
+              trialId.toString(),
+            contact_sharing_status: recipient ? 'pending' : 'awaiting_contact',
+            ...(!existing?.onboarding_status
+              ? { onboarding_status: 'draft' }
+              : {}),
+            is_active: false,
+          },
+          $setOnInsert: {
+            sign_up_date: now,
+            total_milestones: this.getTotalMilestones(trial),
+            total_milestones_completed: 0,
+          },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      );
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $addToSet: { trial_records: record._id } },
+      );
+      return this.interestResponse(record);
     } catch (error) {
-      if ((error as { code?: number }).code === 11000) {
-        return new ResponseDto<TrialsRecordResDto>({
-          data: null,
-          success: false,
-          message: 'User already signed up for this trial',
-        });
-      }
-      throw error;
+      if ((error as { code?: number }).code !== 11000) throw error;
+      const winner = await this.trialsRecordModel.findOne({
+        trial_id: trialId,
+        user_id: userId,
+      });
+      if (!winner?.interest_registered_at)
+        throw new BadRequestException('A trial record already exists.');
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $addToSet: { trial_records: winner._id } },
+      );
+      return this.interestResponse(winner);
     }
+  }
 
-    await this.userModel.findByIdAndUpdate(userId, {
-      // User.trial_records is an ObjectId array. Pushing the full Mongoose
-      // document can recurse through its populated references during casting.
-      $addToSet: { trial_records: trialRecord._id },
-    });
-
+  private interestResponse(record: TrialsRecordDocument) {
     return new ResponseDto<TrialsRecordResDto>({
-      data: plainToInstance(TrialsRecordResDto, trialRecord.toObject(), {
+      data: plainToInstance(TrialsRecordResDto, record.toObject(), {
         excludeExtraneousValues: true,
       }),
-      message: 'Signed up for trial successfully',
+      message:
+        'Your interest has been registered. This does not confirm eligibility or enrolment.',
     });
+  }
+
+  async interestRequests(actorId: Types.ObjectId, query: PageOptionsDto) {
+    const actor = await this.userModel.findById(actorId).select('role').lean();
+    if (actor?.role !== UserRole.ADMIN)
+      throw new ForbiddenException('Administrator access is required');
+    const take = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
+    const page = Math.max(Number(query.page) || 1, 1);
+    return this.trialsRecordModel
+      .find({
+        $or: [
+          { trial_status: TrialStatus.PENDING },
+          {
+            is_approved: true,
+            is_active: true,
+            trial_status: { $in: STUDY_VISIBLE_STATUSES },
+            $or: [
+              { informed_consent_obtained: { $ne: true } },
+              { eligibility_confirmed: { $ne: true } },
+            ],
+          },
+        ],
+      })
+      .select(
+        '_id trial_id user_id is_approved is_active trial_status informed_consent_obtained eligibility_confirmed interest_registered_at contact_sharing_status contact_shared_at onboarding_status +interest_contact +interest_recipient',
+      )
+      .populate('trial_id', 'overview.name')
+      .populate('user_id', 'information.first_name information.last_name email')
+      .sort({ sign_up_date: 1 })
+      .skip((page - 1) * take)
+      .limit(take)
+      .lean();
   }
 
   async findById(id: Types.ObjectId): Promise<ResponseDto<TrialsResDto>> {
@@ -537,6 +644,7 @@ export class TrialsService {
     const noticeBoardId = new Types.ObjectId(dto.noticeBoardId);
     const userIdString = userId.toString();
 
+    await this.assertStudyAccess(userId, trialId);
     await this.validateNoticeBoardItem(trialId, noticeBoardId);
 
     if (dto.like) {
@@ -598,6 +706,7 @@ export class TrialsService {
     const noticeBoardId = new Types.ObjectId(dto.noticeBoardId);
     const userIdString = userId.toString();
 
+    await this.assertStudyAccess(userId, trialId);
     await this.validateNoticeBoardItem(trialId, noticeBoardId);
 
     await this.trialModel.updateOne(
@@ -632,6 +741,7 @@ export class TrialsService {
 
   async markMilestoneCompleted(
     dto: MarkMilestoneCompletedDto,
+    userId: Types.ObjectId,
   ): Promise<ResponseDto<TrialsRecordResDto>> {
     const milestoneId = new Types.ObjectId(dto.milestone_id);
     const trialRecordId = new Types.ObjectId(dto.trial_record_id);
@@ -640,6 +750,13 @@ export class TrialsService {
 
     if (!trialRecord) {
       throw new BadRequestException('Trial record not found');
+    }
+
+    if (
+      trialRecord.user_id.toString() !== userId.toString() ||
+      !canAccessStudy(trialRecord)
+    ) {
+      throw new ForbiddenException('Study-team confirmation is required');
     }
 
     if (trialRecord.trial_status !== TrialStatus.IN_PROGRESS) {
@@ -804,12 +921,32 @@ export class TrialsService {
 
     return {
       ...data,
-      trial,
+      trial:
+        trial && typeof trial === 'object' && 'overview' in trial
+          ? {
+              ...(trial as Record<string, unknown>),
+              __study_access: canAccessStudy(data as unknown as TrialsRecord),
+            }
+          : undefined,
       trial_id: trialId,
       total_milestones: data?.total_milestones ?? trialMilestones?.length ?? 0,
       total_milestones_completed:
         data?.total_milestones_completed ?? completedMilestones.length,
     };
+  }
+
+  private async assertStudyAccess(
+    userId: Types.ObjectId,
+    trialId: Types.ObjectId,
+  ) {
+    const exists = await this.trialsRecordModel.exists({
+      user_id: userId,
+      trial_id: trialId,
+      ...STUDY_CONFIRMATION_FILTER,
+      trial_status: { $in: STUDY_VISIBLE_STATUSES },
+    });
+    if (!exists)
+      throw new ForbiddenException('Study-team confirmation is required');
   }
 
   private getTotalMilestones(trial: TrialsDocument): number {

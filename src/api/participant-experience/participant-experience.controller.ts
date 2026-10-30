@@ -5,6 +5,7 @@ import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { CreateParticipantConfigurationDto } from './dto/create-participant-configuration.dto';
 import {
+  ApproveTrialEnrolmentDto,
   CompleteQuestionnaireDto,
   DeclineTrialOnboardingDto,
   SubmitNativeQuestionnaireDto,
@@ -20,7 +21,7 @@ export class ParticipantExperienceController {
   @Get(':trialId/participant-configuration')
   @ApiAuth({ summary: 'Get published participant configuration' })
   getConfiguration(@Param('trialId', ParseObjectIdPipe) trialId: string) {
-    return this.service.getPublishedConfiguration(
+    return this.service.getOnboardingConfiguration(
       trialId as unknown as Types.ObjectId,
     );
   }
@@ -68,10 +69,11 @@ export class ParticipantExperienceController {
   @Patch('enrolments/:trialRecordId/approve')
   @ApiAuth({ summary: 'Approve trial enrolment' })
   approve(
+    @Body() dto: ApproveTrialEnrolmentDto,
     @Param('trialRecordId', ParseObjectIdPipe) id: string,
     @CurrentUser('id') actorId: Types.ObjectId,
   ) {
-    return this.service.approve(id as unknown as Types.ObjectId, actorId);
+    return this.service.approve(id as unknown as Types.ObjectId, actorId, dto);
   }
 
   @Patch('enrolments/:trialRecordId/decline')

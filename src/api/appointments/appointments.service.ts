@@ -111,7 +111,10 @@ export class AppointmentsService {
     });
   }
 
-  private async findTrialRecord(userId: Types.ObjectId, trialId: Types.ObjectId) {
+  private async findTrialRecord(
+    userId: Types.ObjectId,
+    trialId: Types.ObjectId,
+  ) {
     return this.trialsRecord.findOne({
       user_id: userId,
       trial_id: trialId,
@@ -126,6 +129,8 @@ export class AppointmentsService {
       user_id: userId,
       trial_id: trialId,
       is_approved: true,
+      informed_consent_obtained: true,
+      eligibility_confirmed: true,
       is_active: true,
       trial_status: TrialStatus.IN_PROGRESS,
     });

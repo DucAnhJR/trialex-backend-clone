@@ -59,6 +59,9 @@ describe('NotificationProcessor questionnaire reminder guard', () => {
       trial_status: TrialStatus.IN_PROGRESS,
       onboarding_status: 'approved',
       is_active: true,
+      is_approved: true,
+      informed_consent_obtained: true,
+      eligibility_confirmed: true,
     });
     expect(sender.sendPushNotification).not.toHaveBeenCalled();
   });
