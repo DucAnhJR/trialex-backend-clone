@@ -13,6 +13,10 @@ describe('TrialsService referenced enrolments', () => {
       user_id: userId,
       trial_id: trialId,
       trial_status: TrialStatus.IN_PROGRESS,
+      is_approved: true,
+      is_active: true,
+      informed_consent_obtained: true,
+      eligibility_confirmed: true,
     };
     const updatedRecord = {
       ...trialRecord,
@@ -45,10 +49,13 @@ describe('TrialsService referenced enrolments', () => {
       {} as never,
     );
 
-    const response = await service.markMilestoneCompleted({
-      trial_record_id: recordId.toString(),
-      milestone_id: milestoneId.toString(),
-    });
+    const response = await service.markMilestoneCompleted(
+      {
+        trial_record_id: recordId.toString(),
+        milestone_id: milestoneId.toString(),
+      },
+      userId,
+    );
 
     expect(response.success).toBe(true);
     expect(trialsRecordModel.findByIdAndUpdate).toHaveBeenCalledTimes(2);

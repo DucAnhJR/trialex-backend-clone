@@ -31,6 +31,54 @@ export class TrialsRecord extends Document {
   @Prop({ default: false })
   is_approved: boolean;
 
+  @Prop({ type: String, default: null })
+  interest_copy_version?: string;
+
+  @Prop({ type: Date, default: null })
+  interest_registered_at?: Date;
+
+  @Prop({ type: Object, default: null })
+  interest_acknowledgements?: Record<string, boolean>;
+
+  // Immutable snapshot of exactly the contact details the participant shared.
+  @Prop({ type: Object, default: null, select: false })
+  interest_contact?: { name: string; email: string; phone: string };
+
+  @Prop({ type: String, default: null, select: false })
+  interest_recipient?: string;
+
+  @Prop({ type: String, default: null })
+  interest_trial_name?: string;
+
+  @Prop({
+    type: String,
+    enum: ['pending', 'awaiting_contact', 'shared', 'cancelled'],
+    default: null,
+    index: true,
+  })
+  contact_sharing_status?: string;
+
+  @Prop({ type: Date, default: null })
+  contact_shared_at?: Date;
+
+  @Prop({ type: Date, default: null })
+  contact_delivery_attempted_at?: Date;
+
+  @Prop({ default: false })
+  informed_consent_obtained: boolean;
+
+  @Prop({ default: false })
+  eligibility_confirmed: boolean;
+
+  @Prop({ type: Date, default: null })
+  study_team_confirmed_at?: Date;
+
+  @Prop({ type: Types.ObjectId, default: null })
+  study_team_confirmed_by?: Types.ObjectId;
+
+  @Prop({ type: String, default: null, maxlength: 500 })
+  study_team_confirmation_reference?: string;
+
   @Prop({ type: Date, default: null })
   sign_up_date?: Date;
 
@@ -129,6 +177,10 @@ export class TrialsRecord extends Document {
 }
 
 export const TrialsRecordSchema = SchemaFactory.createForClass(TrialsRecord);
+TrialsRecordSchema.index({
+  contact_sharing_status: 1,
+  contact_delivery_attempted_at: 1,
+});
 export type TrialsRecordDocument = HydratedDocument<TrialsRecord>;
 
 // Enforce the one-enrolment-per-participant-per-trial invariant at the database

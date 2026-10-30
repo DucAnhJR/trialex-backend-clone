@@ -11,9 +11,23 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Transform } from 'class-transformer';
 import { IsString } from 'class-validator';
+import { canAccessStudy } from '../trial-access';
 import { TrialsResDto } from './trials.res.dto';
 
 export class TrialsRecordResDto {
+  @Expose()
+  @Transform(({ obj }) => canAccessStudy(obj), { toClassOnly: true })
+  can_access_study: boolean;
+
+  @Expose() createdAt?: Date;
+  @Expose() updatedAt?: Date;
+
+  @Expose() interest_registered_at?: Date;
+  @Expose() contact_sharing_status?: string;
+  @Expose() contact_shared_at?: Date;
+  @Expose() informed_consent_obtained?: boolean;
+  @Expose() eligibility_confirmed?: boolean;
+
   @StringField({
     description: 'Trial Record ID',
   })

@@ -300,7 +300,7 @@ export class AuthService {
     const user = await this.userModel.findOne({ email }).populate({
       path: 'trial_records',
       select:
-        '_id trial_id is_approved is_active has_questionnaire_schedule trial_status onboarding_status sign_up_date approval_date',
+        '_id trial_id is_approved is_active informed_consent_obtained eligibility_confirmed interest_registered_at contact_sharing_status contact_shared_at createdAt updatedAt has_questionnaire_schedule trial_status onboarding_status sign_up_date approval_date',
     });
 
     if (!user) {
@@ -362,7 +362,7 @@ export class AuthService {
       .populate({
         path: 'trial_records',
         select:
-          '_id trial_id is_approved is_active has_questionnaire_schedule trial_status onboarding_status sign_up_date approval_date',
+          '_id trial_id is_approved is_active informed_consent_obtained eligibility_confirmed interest_registered_at contact_sharing_status contact_shared_at createdAt updatedAt has_questionnaire_schedule trial_status onboarding_status sign_up_date approval_date',
       })
       .lean();
 

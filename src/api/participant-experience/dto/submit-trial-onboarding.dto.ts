@@ -1,6 +1,9 @@
 import {
+  Equals,
   IsBoolean,
+  IsDateString,
   IsIn,
+  IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
@@ -30,4 +33,15 @@ export class DeclineTrialOnboardingDto {
 
 export class SubmitNativeQuestionnaireDto {
   @IsObject() answers: Record<string, unknown>;
+}
+
+// Recorded by an administrator on behalf of the study team, never by participants.
+export class ApproveTrialEnrolmentDto {
+  @IsBoolean() @Equals(true) informed_consent_obtained: boolean;
+  @IsBoolean() @Equals(true) eligibility_confirmed: boolean;
+  @IsDateString() study_team_confirmed_at: string;
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  study_team_confirmation_reference: string;
 }
