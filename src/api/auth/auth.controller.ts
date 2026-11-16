@@ -6,6 +6,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { VerifyUserDto } from '../users/dto/verify-user.dto';
 import { AuthService } from './auth.service';
+import { CheckEmailDto } from './dto/check-email.dto';
 import { CreateSmsDto } from './dto/create-sms.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
@@ -65,6 +66,14 @@ export class AuthController {
   })
   async refreshToken(@Body() dto: RefreshReqDto) {
     return this.authService.refreshToken(dto);
+  }
+
+  @Post('check-email')
+  @ApiPublic({
+    summary: 'Check whether a registration email is already in use',
+  })
+  async checkEmail(@Body() dto: CheckEmailDto) {
+    return this.authService.checkEmail(dto.email);
   }
 
   @Post('sign-up')
