@@ -14,7 +14,10 @@ import { hashPassword, verifyPassword } from '@/utils/password.util';
 import { InjectQueue } from '@nestjs/bullmq';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
+  BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   ServiceUnavailableException,
@@ -61,33 +64,169 @@ export class AuthService {
     private readonly chatService: ChatService,
   ) {}
 
-  async verifyOtpUnified(dto: VerifyOtpDto): Promise<ResponseNoDataDto> {
-    const { method, otp, email, phone_number } = dto;
+  private recoveryDigest(value: string, key: string): string {
+    return crypto.createHmac('sha256', key).update(value).digest('hex');
+  }
 
-    const filter =
-      method === 'email'
-        ? { email }
-        : { 'information.phone_number': phone_number };
+  private async sendEmailRecovery(email: string): Promise<ResponseNoDataDto> {
+    if (!email?.trim()) throw new BadRequestException('Email is required');
+    const user = await this.userModel.findOne({
+      email: email?.trim().toLowerCase(),
+    });
+    const generic = new ResponseNoDataDto({
+      message: 'If the email is registered, an OTP has been sent to it',
+    });
+    if (!user) return generic;
+    const now = new Date();
+    const otp = crypto.randomInt(10000, 100000).toString();
+    const otpHash = await hashPassword(otp);
+    const claimed = await this.userModel.findOneAndUpdate(
+      {
+        _id: user._id,
+        $or: [
+          { 'passwordRecovery.resendAfter': { $exists: false } },
+          { 'passwordRecovery.resendAfter': { $lte: now } },
+        ],
+      },
+      {
+        $set: {
+          passwordRecovery: {
+            otpHash,
+            expiresAt: new Date(now.getTime() + 600000),
+            resendAfter: new Date(now.getTime() + 30000),
+            attemptsLeft: 5,
+          },
+        },
+      },
+    );
+    if (!claimed)
+      throw new HttpException(
+        'Please wait 30 seconds before requesting another code',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    try {
+      await this.mailService.sendEmailForgotPassword({
+        email: user.email,
+        otp,
+      });
+    } catch {
+      await this.userModel.updateOne(
+        { _id: user._id, 'passwordRecovery.otpHash': otpHash },
+        { $unset: { passwordRecovery: 1 } },
+      );
+      throw new ServiceUnavailableException(
+        'Unable to send verification email. Please try again later.',
+      );
+    }
+    return generic;
+  }
+
+  private async verifyEmailRecovery(
+    email: string,
+    otp: string,
+  ): Promise<ResponseDto<{ resetToken: string }>> {
+    if (!email?.trim())
+      throw new UnauthorizedException('Invalid or expired OTP');
+    // Consume an attempt atomically so parallel requests cannot bypass the limit.
+    const user = await this.userModel
+      .findOneAndUpdate(
+        {
+          email: email?.trim().toLowerCase(),
+          'passwordRecovery.expiresAt': { $gt: new Date() },
+          'passwordRecovery.attemptsLeft': { $gt: 0 },
+          'passwordRecovery.otpHash': { $exists: true },
+        },
+        { $inc: { 'passwordRecovery.attemptsLeft': -1 } },
+      )
+      .select('+passwordRecovery');
+    const digest = user?.passwordRecovery?.otpHash;
+    if (
+      !user ||
+      !digest ||
+      !/^\d{5}$/.test(otp) ||
+      !(await verifyPassword(otp, digest))
+    ) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const result = await this.userModel.updateOne(
+      {
+        _id: user._id,
+        'passwordRecovery.otpHash': digest,
+        'passwordRecovery.expiresAt': { $gt: new Date() },
+      },
+      {
+        $set: {
+          'passwordRecovery.tokenHash': this.recoveryDigest(
+            resetToken,
+            user.password,
+          ),
+          'passwordRecovery.verifiedUntil': new Date(Date.now() + 300000),
+        },
+        $unset: {
+          'passwordRecovery.otpHash': 1,
+          'passwordRecovery.expiresAt': 1,
+          'passwordRecovery.attemptsLeft': 1,
+        },
+      },
+    );
+    if (result.modifiedCount !== 1)
+      throw new UnauthorizedException('Invalid or expired OTP');
+    return new ResponseDto({
+      data: { resetToken },
+      message: 'OTP verified successfully',
+    });
+  }
+
+  private async resetEmailPassword(
+    dto: ResetPasswordDto,
+  ): Promise<ResponseNoDataDto> {
+    if (
+      !dto.email?.trim() ||
+      !dto.resetToken ||
+      !/^[a-f0-9]{64}$/.test(dto.resetToken)
+    )
+      throw new UnauthorizedException('OTP not verified or expired');
+    const user = await this.userModel.findOne({
+      email: dto.email?.trim().toLowerCase(),
+    });
+    if (!user) throw new UnauthorizedException('OTP not verified or expired');
+    const password = await hashPassword(dto.newPassword);
+    // Update the password and consume the token in the same MongoDB operation.
+    const result = await this.userModel.updateOne(
+      {
+        _id: user._id,
+        password: user.password,
+        'passwordRecovery.tokenHash': this.recoveryDigest(
+          dto.resetToken,
+          user.password,
+        ),
+        'passwordRecovery.verifiedUntil': { $gt: new Date() },
+      },
+      { $set: { password }, $unset: { passwordRecovery: 1 } },
+    );
+    if (result.modifiedCount !== 1)
+      throw new UnauthorizedException('OTP not verified or expired');
+    return new ResponseNoDataDto({ message: 'Password reset successfully' });
+  }
+
+  async verifyOtpUnified(
+    dto: VerifyOtpDto,
+  ): Promise<ResponseNoDataDto | ResponseDto<{ resetToken: string }>> {
+    if (dto.method === 'email')
+      return this.verifyEmailRecovery(dto.email, dto.otp);
+    const { otp, phone_number } = dto;
+
+    const filter = { 'information.phone_number': phone_number };
 
     const user = await this.userModel.findOne(filter);
     if (!user) throw new ValidationException(ErrorCode.E003);
 
-    if (method === 'email') {
-      const cachedOtp = await this.cacheManager.store.get<string>(
-        createCacheKey(CacheKey.FORGOT_PASSWORD_OTP, user.id),
-      );
-      if (!cachedOtp || cachedOtp !== otp) {
-        throw new UnauthorizedException('Invalid or expired OTP');
-      }
-    } else if (method === 'sms') {
-      const isValid = await this.smsService.createVerificationCheck(
-        phone_number,
-        otp,
-      );
-      if (!isValid) {
-        throw new UnauthorizedException('Invalid or expired OTP');
-      }
-    }
+    const isValid = await this.smsService.createVerificationCheck(
+      phone_number,
+      otp,
+    );
+    if (!isValid) throw new UnauthorizedException('Invalid or expired OTP');
 
     await this.cacheManager.store.set(
       createCacheKey(CacheKey.OTP_VERIFIED, user.id),
@@ -99,12 +238,10 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<ResponseNoDataDto> {
-    const { method, email, phone_number, newPassword } = dto;
+    if (dto.method === 'email') return this.resetEmailPassword(dto);
+    const { phone_number, newPassword } = dto;
 
-    const filter =
-      method === 'email'
-        ? { email }
-        : { 'information.phone_number': phone_number };
+    const filter = { 'information.phone_number': phone_number };
 
     const user = await this.userModel.findOne(filter);
     if (!user) throw new ValidationException(ErrorCode.E003);
@@ -127,10 +264,8 @@ export class AuthService {
   }
 
   async forgotAndSendOtp(dto: ForgotPasswordDto): Promise<ResponseNoDataDto> {
-    const filter =
-      dto.method === 'email'
-        ? { email: dto.email }
-        : { 'information.phone_number': dto.phone_number };
+    if (dto.method === 'email') return this.sendEmailRecovery(dto.email);
+    const filter = { 'information.phone_number': dto.phone_number };
 
     const user = await this.userModel.findOne(filter);
     if (user) {
@@ -142,34 +277,14 @@ export class AuthService {
         ms(TTL),
       );
 
-      if (dto.method === 'email') {
-        // Reset codes expire quickly: do not put them behind bulk email jobs.
-        // Only acknowledge this request once SMTP has accepted the message.
-        try {
-          await this.mailService.sendEmailForgotPassword({
-            email: user.email,
-            otp,
-          });
-        } catch {
-          await this.cacheManager.store.del(
-            createCacheKey(CacheKey.FORGOT_PASSWORD_OTP, user.id),
-          );
-          throw new ServiceUnavailableException(
-            'Unable to send verification email. Please try again later.',
-          );
-        }
-      } else if (dto.method === 'sms') {
-        await this.smsQueue.add(
-          JobName.SMS_VERIFICATION,
-          {
-            phoneNumber: dto.phone_number,
-          },
-          {
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 60000 },
-          },
-        );
-      }
+      await this.smsQueue.add(
+        JobName.SMS_VERIFICATION,
+        { phoneNumber: dto.phone_number },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 60000 },
+        },
+      );
     }
 
     return new ResponseNoDataDto({

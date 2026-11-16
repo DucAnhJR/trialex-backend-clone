@@ -6,6 +6,11 @@ import {
 import { IsIn, IsString, ValidateIf } from 'class-validator';
 
 export class ResetPasswordDto {
+  @StringFieldOptional({
+    description: 'Single-use token returned after email OTP verification',
+  })
+  resetToken?: string;
+
   @IsString()
   @IsIn(['email', 'sms'])
   @StringField({
