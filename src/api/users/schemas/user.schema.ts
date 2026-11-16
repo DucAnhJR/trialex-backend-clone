@@ -9,8 +9,22 @@ import { Document } from '../interfaces/document.interface';
 
 export type UserDocument = HydratedDocument<User>;
 
+@Schema({ _id: false })
+export class PasswordRecovery {
+  @Prop() otpHash?: string;
+  @Prop() expiresAt?: Date;
+  @Prop() resendAfter?: Date;
+  @Prop() attemptsLeft?: number;
+  @Prop() tokenHash?: string;
+  @Prop() verifiedUntil?: Date;
+}
+const PasswordRecoverySchema = SchemaFactory.createForClass(PasswordRecovery);
+
 @Schema({ timestamps: true })
 export class User {
+  @Prop({ type: PasswordRecoverySchema, select: false })
+  passwordRecovery?: PasswordRecovery;
+
   @Prop({ required: true, unique: true })
   email: string;
 
