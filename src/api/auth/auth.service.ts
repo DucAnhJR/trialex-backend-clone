@@ -2,15 +2,12 @@ import { BaseUserResDto } from '@/api/users/dto/base-user.res.dto';
 import { User, UserDocument } from '@/api/users/schemas/user.schema';
 import { ResponseNoDataDto } from '@/common/dto/response/response-no-data.dto';
 import { ResponseDto } from '@/common/dto/response/response.dto';
-import {
-  IEmailJob,
-  IForgotPasswordJob,
-} from '@/common/interfaces/job.interface';
 import { OTP_VERIFIED_FLAG_TTL } from '@/constants/app.constant';
 import { CacheKey } from '@/constants/cache.constant';
 import { ErrorCode } from '@/constants/error-code.constant';
 import { JobName, QueueName } from '@/constants/job.constant';
 import { ValidationException } from '@/exceptions/validation.exception';
+import { MailService } from '@/mail/mail.service';
 import { SmsService } from '@/sms/sms.service';
 import { createCacheKey } from '@/utils/cache.util';
 import { hashPassword, verifyPassword } from '@/utils/password.util';
@@ -20,6 +17,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
@@ -59,8 +57,7 @@ export class AuthService {
     private readonly smsService: SmsService,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
-    @InjectQueue(QueueName.EMAIL)
-    private readonly emailQueue: Queue<IEmailJob, any, string>,
+    private readonly mailService: MailService,
     private readonly chatService: ChatService,
   ) {}
 
@@ -146,11 +143,21 @@ export class AuthService {
       );
 
       if (dto.method === 'email') {
-        await this.emailQueue.add(
-          JobName.EMAIL_FORGOT_PASSWORD,
-          { email: user.email, otp } as IForgotPasswordJob,
-          { attempts: 3, backoff: { type: 'exponential', delay: 60000 } },
-        );
+        // Reset codes expire quickly: do not put them behind bulk email jobs.
+        // Only acknowledge this request once SMTP has accepted the message.
+        try {
+          await this.mailService.sendEmailForgotPassword({
+            email: user.email,
+            otp,
+          });
+        } catch {
+          await this.cacheManager.store.del(
+            createCacheKey(CacheKey.FORGOT_PASSWORD_OTP, user.id),
+          );
+          throw new ServiceUnavailableException(
+            'Unable to send verification email. Please try again later.',
+          );
+        }
       } else if (dto.method === 'sms') {
         await this.smsQueue.add(
           JobName.SMS_VERIFICATION,
@@ -223,6 +230,18 @@ export class AuthService {
 
     return new ResponseNoDataDto({
       message: 'User verified successfully',
+    });
+  }
+
+  async checkEmail(email: string): Promise<ResponseDto<{ exists: boolean }>> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const exists = !!(await this.userModel.exists({
+      email: { $regex: `^${escapedEmail}$`, $options: 'i' },
+    }));
+    return new ResponseDto({
+      data: { exists },
+      message: 'Email checked successfully',
     });
   }
 

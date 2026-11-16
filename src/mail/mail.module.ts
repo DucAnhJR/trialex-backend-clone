@@ -17,6 +17,9 @@ import { MailService } from './mail.service';
           ignoreTLS: config.get('mail.ignoreTLS', { infer: true }),
           requireTLS: config.get('mail.requireTLS', { infer: true }),
           secure: config.get('mail.secure', { infer: true }),
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 15000,
           logger: false, // false: disable logger, to enable set true or MailerCustomLogger.getInstance() (custom logger using NestJS Logger)
           auth: {
             user: config.get('mail.user', { infer: true }),
