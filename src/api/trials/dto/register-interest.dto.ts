@@ -1,10 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Equals, IsBoolean, IsIn } from 'class-validator';
 
-export const INTEREST_COPY_VERSION = 'interest-v1';
+export const INTEREST_COPY_VERSION = 'interest-v2';
+// v1 evidence remains v1; existing installed clients remain compatible.
+export const ACCEPTED_INTEREST_COPY_VERSIONS = [
+  'interest-v1',
+  INTEREST_COPY_VERSION,
+];
 export class RegisterInterestDto {
-  @ApiProperty({ enum: [INTEREST_COPY_VERSION] })
-  @IsIn([INTEREST_COPY_VERSION])
+  @ApiProperty({ enum: ACCEPTED_INTEREST_COPY_VERSIONS })
+  @IsIn(ACCEPTED_INTEREST_COPY_VERSIONS)
   copy_version: string;
 
   @ApiProperty({ example: true })

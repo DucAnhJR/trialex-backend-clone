@@ -20,6 +20,7 @@ import {
   NoticeBoardActionDto,
 } from './dto/notice-board-action.dto';
 import { QueryTrialsRecord } from './dto/query-active-trials-record.dto';
+import { QueryTrialsDto } from './dto/query-trials.dto';
 import { UpdateReferralCodeDto } from './dto/referral-code.dto';
 import { RegisterInterestDto } from './dto/register-interest.dto';
 import { TrialsRecordResDto } from './dto/trials-record.res.dto';
@@ -131,7 +132,7 @@ export class TrialsController {
     isPaginated: true,
     type: TrialsResDto,
   })
-  async getAllTrials(@Query() query: PageOptionsDto) {
+  async getAllTrials(@Query() query: QueryTrialsDto) {
     return this.trialsService.findAll(query);
   }
 
