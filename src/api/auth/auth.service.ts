@@ -20,6 +20,7 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -50,6 +51,8 @@ import { JwtRefreshPayloadType } from './types/jwt-refresh-payload.type';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Session.name) private sessionModel: Model<Session>,
@@ -109,7 +112,40 @@ export class AuthService {
         email: user.email,
         otp,
       });
-    } catch {
+    } catch (error: unknown) {
+      // SMTP responses/messages may contain recipient addresses or credentials.
+      // Log only diagnostic codes, never the raw error or OTP.
+      const failure = error as {
+        code?: unknown;
+        responseCode?: unknown;
+        command?: unknown;
+      } | null;
+      const code =
+        typeof failure?.code === 'string' && /^[A-Z_]{1,40}$/.test(failure.code)
+          ? failure.code
+          : 'UNKNOWN';
+      const responseCode =
+        typeof failure?.responseCode === 'number' &&
+        Number.isInteger(failure.responseCode)
+          ? failure.responseCode
+          : null;
+      const command =
+        typeof failure?.command === 'string' &&
+        [
+          'CONN',
+          'AUTH',
+          'MAIL FROM',
+          'RCPT TO',
+          'DATA',
+          'STARTTLS',
+          'EHLO',
+          'HELO',
+        ].includes(failure.command)
+          ? failure.command
+          : null;
+      this.logger.error(
+        `Password recovery email delivery failed: ${JSON.stringify({ code, responseCode, command })}`,
+      );
       await this.userModel.updateOne(
         { _id: user._id, 'passwordRecovery.otpHash': otpHash },
         { $unset: { passwordRecovery: 1 } },

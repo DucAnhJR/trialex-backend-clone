@@ -1,6 +1,7 @@
 jest.mock('../../sms/sms.service', () => ({ SmsService: class {} }));
 jest.mock('../chat/chat.service', () => ({ ChatService: class {} }));
 jest.mock('@nestjs/jwt', () => ({ JwtService: class {} }));
+import { Logger } from '@nestjs/common';
 import { hashPassword, verifyPassword } from '../../utils/password.util';
 import { AuthService } from './auth.service';
 
@@ -224,11 +225,27 @@ describe('MongoDB email password recovery', () => {
 
   it('reports mail rejection and removes the unsent challenge', async () => {
     const { service, request, user, mail } = await setup();
-    mail.sendEmailForgotPassword.mockRejectedValue(new Error('SMTP rejected'));
-    await expect(service.forgotAndSendOtp(request)).rejects.toMatchObject({
-      status: 503,
-    });
-    expect(user.passwordRecovery).toBeUndefined();
+    const log = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
+    mail.sendEmailForgotPassword.mockRejectedValue(
+      Object.assign(
+        new Error('SMTP rejected secret@example.org password=secret'),
+        { code: 'EAUTH', responseCode: 535, command: 'AUTH' },
+      ),
+    );
+    try {
+      await expect(service.forgotAndSendOtp(request)).rejects.toMatchObject({
+        status: 503,
+      });
+      expect(user.passwordRecovery).toBeUndefined();
+      expect(log).toHaveBeenCalledWith(
+        'Password recovery email delivery failed: {"code":"EAUTH","responseCode":535,"command":"AUTH"}',
+      );
+      expect(JSON.stringify(log.mock.calls)).not.toContain('secret');
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('does not send mail for an unknown email', async () => {
