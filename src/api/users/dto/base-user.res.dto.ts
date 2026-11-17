@@ -6,7 +6,7 @@ import {
   EnumField,
   StringField,
 } from '@/decorators/field.decorators';
-import { Expose } from 'class-transformer';
+import { Expose, Transform } from 'class-transformer';
 import { Document } from '../interfaces/document.interface';
 import { Information } from '../interfaces/information.interface';
 import { Notifications } from '../interfaces/notifications.interface';
@@ -19,6 +19,12 @@ export class BaseUserResDto extends AuditResDto {
   @ClassField(() => Information)
   @Expose()
   information: Information;
+
+  @Expose()
+  @Transform(({ obj }) => (obj.trial_preferences || []).map(String), {
+    toClassOnly: true,
+  })
+  trial_preferences: string[];
 
   @ClassField(() => Notifications)
   @Expose()

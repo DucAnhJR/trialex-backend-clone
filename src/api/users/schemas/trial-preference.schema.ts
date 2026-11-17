@@ -5,6 +5,9 @@ export type TrialPreferenceDocument = HydratedDocument<TrialPreference>;
 
 @Schema({ collection: 'trial_preferences', timestamps: true })
 export class TrialPreference {
+  @Prop({ type: String, unique: true, sparse: true })
+  code?: string;
+
   @Prop({ required: true })
   trial_preferences_name: string;
 

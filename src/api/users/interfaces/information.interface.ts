@@ -3,8 +3,9 @@ import { ClassField, StringField } from '@/decorators/field.decorators';
 import { Prop } from '@nestjs/mongoose';
 import { Expose } from 'class-transformer';
 import { PhoneNumber } from './phone-number.interface';
+import { ProfileExtras } from './profile-extras';
 
-export class Information {
+export class Information extends ProfileExtras {
   @StringField({
     description: 'First name of the user',
     example: 'John',

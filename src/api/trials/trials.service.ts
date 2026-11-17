@@ -21,10 +21,7 @@ import {
   QuestionnaireInstance,
   QuestionnaireInstanceDocument,
 } from '../participant-experience/schemas/questionnaire-instance.schema';
-import {
-  TrialPreference,
-  TrialPreferenceDocument,
-} from '../users/schemas/trial-preference.schema';
+import { TrialPreference } from '../users/schemas/trial-preference.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { MarkMilestoneCompletedDto } from './dto/mark-milestone-completed.dto';
 import {
@@ -32,9 +29,10 @@ import {
   NoticeBoardActionDto,
 } from './dto/notice-board-action.dto';
 import { QueryTrialsRecord } from './dto/query-active-trials-record.dto';
+import { QueryTrialsDto } from './dto/query-trials.dto';
 import { UpdateReferralCodeDto } from './dto/referral-code.dto';
 import {
-  INTEREST_COPY_VERSION,
+  ACCEPTED_INTEREST_COPY_VERSIONS,
   RegisterInterestDto,
 } from './dto/register-interest.dto';
 import { TrialsRecordResDto } from './dto/trials-record.res.dto';
@@ -46,6 +44,7 @@ import {
   TrialsRecordDocument,
 } from './schemas/trials-record.schema';
 import { Trials, TrialsDocument } from './schemas/trials.schema';
+import { themePattern } from './theme-filter';
 import {
   canAccessStudy,
   STUDY_CONFIRMATION_FILTER,
@@ -61,7 +60,7 @@ export class TrialsService {
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
     @InjectModel(TrialPreference.name)
-    private trialPreferenceModel: Model<TrialPreferenceDocument>,
+    private trialPreferenceModel: Model<TrialPreference>,
     @InjectModel(QuestionnaireInstance.name)
     private questionnaireInstanceModel: Model<QuestionnaireInstanceDocument>,
   ) {}
@@ -113,7 +112,7 @@ export class TrialsService {
     ];
 
     const orClauses = names.flatMap((name) => {
-      const regex = new RegExp(this.escapeRegex(name), 'i');
+      const regex = themePattern(name);
       return fields.map((field) => ({ [field]: regex }));
     });
 
@@ -446,7 +445,7 @@ export class TrialsService {
   ): Promise<ResponseDto<TrialsRecordResDto>> {
     if (
       !dto ||
-      dto.copy_version !== INTEREST_COPY_VERSION ||
+      !ACCEPTED_INTEREST_COPY_VERSIONS.includes(dto.copy_version) ||
       dto.trial_information_read !== true ||
       dto.interest_is_not_enrolment !== true ||
       dto.study_team_obtains_consent !== true ||
@@ -526,7 +525,7 @@ export class TrialsService {
         },
         {
           $set: {
-            interest_copy_version: INTEREST_COPY_VERSION,
+            interest_copy_version: dto.copy_version,
             interest_registered_at: now,
             interest_acknowledgements: {
               trial_information_read: true,
@@ -811,7 +810,7 @@ export class TrialsService {
   }
 
   async findAll(
-    query: PageOptionsDto,
+    query: QueryTrialsDto,
   ): Promise<OffsetPaginatedDto<TrialsResDto>> {
     const filter: FilterQuery<Trials> = {};
 
@@ -820,6 +819,21 @@ export class TrialsService {
         { 'overview.name': { $regex: query.q, $options: 'i' } },
         {
           'overview.description.elaborated': { $regex: query.q, $options: 'i' },
+        },
+      ];
+    }
+
+    if (query.theme_ids?.length) {
+      const themes = await this.trialPreferenceModel
+        .find({ _id: { $in: query.theme_ids } })
+        .lean();
+      if (themes.length !== query.theme_ids.length)
+        throw new BadRequestException('Invalid health theme filter.');
+      filter.$and = [
+        {
+          $or: themes.map((theme) => ({
+            'overview.theme': themePattern(theme.trial_preferences_name),
+          })),
         },
       ];
     }
